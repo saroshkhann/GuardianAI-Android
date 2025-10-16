@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="24dp"
+    android:background="#FFFFFF">
+
+    <!-- Title -->
+    <TextView
+        android:id="@+id/text_title_risk"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="Apps often access your sensors silently."
+        android:textColor="#2C3E50"
+        android:textSize="28sp"
+        android:textStyle="bold"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="32dp"/>
+
+    <!-- Subtitle -->
+    <TextView
+        android:id="@+id/text_subtitle_risk"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="GuardianAI alerts you instantly when this happens."
+        android:textColor="#7F8C8D"
+        android:textSize="16sp"
+        app:layout_constraintTop_toBottomOf="@id/text_title_risk"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="8dp"/>
+
+    <!-- Grid Layout for Items -->
+    <GridLayout
+        android:id="@+id/grid_layout"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:columnCount="2"
+        android:rowCount="2"
+        android:useDefaultMargins="true"
+        app:layout_constraintTop_toBottomOf="@id/text_subtitle_risk"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="32dp">
+
+        <!-- Camera Item -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_columnWeight="1"
+            android:background="@drawable/grid_item_background"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:padding="24dp">
+            <ImageView
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:src="@drawable/ic_camera"
+                app:tint="#0D6EFD"/>
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="Camera"
+                android:textColor="#2C3E50"/>
+        </LinearLayout>
+
+        <!-- Microphone Item -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_columnWeight="1"
+            android:background="@drawable/grid_item_background"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:padding="24dp">
+            <ImageView
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:src="@drawable/ic_microphone"
+                app:tint="#0D6EFD"/>
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="Microphone"
+                android:textColor="#2C3E50"/>
+        </LinearLayout>
+
+        <!-- GPS Item -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_columnWeight="1"
+            android:background="@drawable/grid_item_background"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:padding="24dp">
+            <ImageView
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:src="@drawable/ic_location"
+                app:tint="#0D6EFD"/>
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="GPS"
+                android:textColor="#2C3E50"/>
+        </LinearLayout>
+
+        <!-- Clipboard Item -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_columnWeight="1"
+            android:background="@drawable/grid_item_background"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:padding="24dp">
+            <ImageView
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:src="@drawable/ic_clipboard"
+                app:tint="#0D6EFD"/>
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="Clipboard"
+                android:textColor="#2C3E50"/>
+        </LinearLayout>
+    </GridLayout>
+
+    <!-- Notice Box -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:background="@drawable/notice_background"
+        android:padding="16dp"
+        app:layout_constraintTop_toBottomOf="@id/grid_layout"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="24dp">
+        <ImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:src="@drawable/ic_lightbulb"
+            app:tint="#0D6EFD"
+            android:layout_marginEnd="12dp"/>
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Be mindful of apps that request unnecessary permissions."
+            android:textColor="#7F8C8D"/>
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>
