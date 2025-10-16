@@ -18,11 +18,11 @@
         android:id="@+id/icon_shield"
         android:layout_width="80dp"
         android:layout_height="80dp"
-        android:src="@drawable/ic_shield"
+        android:src="@drawable/ic_logo_final"
         app:layout_constraintBottom_toTopOf="@id/text_welcome_title"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:tint="#2C3E50"
+        app:tint="#60B6D7"
         android:layout_marginBottom="24dp"
         android:contentDescription="GuardianAI Logo" />
 

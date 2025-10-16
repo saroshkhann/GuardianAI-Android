@@ -11,7 +11,7 @@
         android:id="@+id/splash_logo"
         android:layout_width="120dp"
         android:layout_height="120dp"
-        android:src="@drawable/ic_logo_combined"
+        android:src="@drawable/ic_logo_final"
         app:tint="#60B6D7"
         android:contentDescription="GuardianAI Logo"
         app:layout_constraintBottom_toTopOf="@+id/splash_title"
