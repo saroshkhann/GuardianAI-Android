@@ -1,5 +1,5 @@
 package com.example.guardianai;
-
+import android.content.Intent;
 import androidx.appcompat.app.AppCompatActivity;
 
 import android.content.Intent;
@@ -25,16 +25,13 @@ public class WelcomeActivity extends AppCompatActivity {
         skipButton = findViewById(R.id.button_skip);
 
         // Set a click listener for the "Get Started" button
+        // ... inside onCreate method
         getStartedButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                // This is where you will navigate to the next screen of your onboarding wizard
-                // For now, it shows a temporary message.
-                Toast.makeText(WelcomeActivity.this, "Get Started Clicked!", Toast.LENGTH_SHORT).show();
-
-                // Example: How to start the next activity
-                // Intent intent = new Intent(WelcomeActivity.this, OnboardingStep2Activity.class);
-                // startActivity(intent);
+                // Start the OnboardingActivity
+                Intent intent = new Intent(WelcomeActivity.this, OnboardingActivity.class);
+                startActivity(intent);
             }
         });
 
