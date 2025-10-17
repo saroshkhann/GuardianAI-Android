@@ -21,6 +21,8 @@ public class OnboardingAdapter extends FragmentStateAdapter {
             case 1:
                 return new OnboardingRiskFragment();
             // Add more cases for more screens
+            case 2: // New page
+                return new OnboardingFeaturesFragment();
             default:
                 return new OnboardingPurposeFragment();
         }
@@ -29,6 +31,6 @@ public class OnboardingAdapter extends FragmentStateAdapter {
     @Override
     public int getItemCount() {
         // The number of pages
-        return 2;
+        return 3;
     }
 }
