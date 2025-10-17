@@ -103,7 +103,7 @@ public class OnboardingActivity extends AppCompatActivity {
         }
 
         if (position == adapter.getItemCount() - 1) {
-            nextButton.setText("Finish");
+            nextButton.setText("Go to Dashboard");
         } else {
             nextButton.setText("Next");
         }

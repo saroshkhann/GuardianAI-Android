@@ -25,6 +25,8 @@ public class OnboardingAdapter extends FragmentStateAdapter {
                 return new OnboardingFeaturesFragment();
             case 3: // Your new page
                 return new OnboardingTipsFragment();
+            case 4: // Your new page
+                return new OnboardingCompleteFragment();
             default:
                 return new OnboardingPurposeFragment();
         }
@@ -33,6 +35,6 @@ public class OnboardingAdapter extends FragmentStateAdapter {
     @Override
     public int getItemCount() {
         // The number of pages
-        return 4;
+        return 5;
     }
 }
