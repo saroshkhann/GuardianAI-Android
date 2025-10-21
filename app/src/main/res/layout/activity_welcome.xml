@@ -8,78 +8,90 @@
     tools:context=".WelcomeActivity">
 
     <androidx.constraintlayout.widget.Guideline
-        android:id="@+id/guideline_center"
+        android:id="@+id/guideline_top"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        app:layout_constraintGuide_percent="0.40" />
+        app:layout_constraintGuide_percent="0.2" />
 
     <ImageView
         android:id="@+id/icon_shield"
         android:layout_width="80dp"
         android:layout_height="80dp"
         android:src="@drawable/ic_logo_final"
-        app:layout_constraintBottom_toTopOf="@id/text_welcome_title"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
         app:tint="#60B6D7"
-        android:layout_marginBottom="24dp"
+        app:layout_constraintBottom_toTopOf="@+id/text_welcome_title"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="@+id/guideline_top"
+        app:layout_constraintVertical_chainStyle="packed"
         android:contentDescription="GuardianAI Logo" />
 
     <TextView
         android:id="@+id/text_welcome_title"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_marginTop="32dp"
         android:text="Welcome to GuardianAI"
+        android:textColor="#2C3E50"
         android:textSize="28sp"
         android:textStyle="bold"
-        android:textColor="#2C3E50"
-        app:layout_constraintBottom_toTopOf="@+id/guideline_center"
+        app:layout_constraintBottom_toTopOf="@+id/text_welcome_subtitle"
+        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
+        app:layout_constraintTop_toBottomOf="@+id/icon_shield" />
 
     <TextView
         android:id="@+id/text_welcome_subtitle"
-        android:layout_width="wrap_content"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:text="Let's help you take control of your digital privacy."
-        android:textSize="16sp"
-        android:textColor="#7F8C8D"
+        android:layout_marginStart="48dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginEnd="48dp"
         android:gravity="center"
-        app:layout_constraintTop_toBottomOf="@id/text_welcome_title"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginTop="8dp" />
-
-    <TextView
-        android:id="@+id/button_skip"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Skip"
-        android:textSize="16sp"
+        android:text="Let's help you take control of your digital privacy."
         android:textColor="#7F8C8D"
-        android:padding="12dp"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
+        android:textSize="16sp"
+        app:layout_constraintBottom_toTopOf="@id/button_get_started"
         app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginBottom="24dp" />
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/text_welcome_title"
+        app:layout_constraintVertical_bias="0" />
 
-    <androidx.appcompat.widget.AppCompatButton
+    <Button
         android:id="@+id/button_get_started"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:text="Get Started"
-        android:textColor="#1ABC9C"
-        android:textSize="16sp"
-        android:textStyle="bold"
-        android:background="@drawable/button_dark_rounded"
-        android:paddingTop="14dp"
-        android:paddingBottom="14dp"
-        app:layout_constraintBottom_toTopOf="@id/button_skip"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
         android:layout_marginStart="24dp"
         android:layout_marginEnd="24dp"
-        android:layout_marginBottom="8dp" />
+        android:layout_marginBottom="16dp"
+        android:background="@drawable/button_primary_background"
+        android:paddingTop="12dp"
+        android:paddingBottom="12dp"
+        android:text="Get Started"
+        android:textAllCaps="false"
+        android:textColor="@android:color/white"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        app:layout_constraintBottom_toTopOf="@+id/text_skip"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <TextView
+        android:id="@+id/text_skip"
+
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="32dp"
+        android:text="Skip"
+        android:textColor="#7F8C8D"
+        android:textSize="16sp"
+        android:padding="8dp"
+        android:clickable="true"
+        android:focusable="true"
+        android:foreground="?android:attr/selectableItemBackground"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

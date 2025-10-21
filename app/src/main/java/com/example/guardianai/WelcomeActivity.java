@@ -22,7 +22,7 @@ public class WelcomeActivity extends AppCompatActivity {
 
         // Find the buttons from the layout by their ID
         getStartedButton = findViewById(R.id.button_get_started);
-        skipButton = findViewById(R.id.button_skip);
+        skipButton = findViewById(R.id.text_skip);
 
         // Set a click listener for the "Get Started" button
         // ... inside onCreate method
