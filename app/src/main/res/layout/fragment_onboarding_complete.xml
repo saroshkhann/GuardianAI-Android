@@ -6,24 +6,19 @@
     android:layout_height="match_parent"
     android:background="#FFFFFF">
 
-    <androidx.constraintlayout.widget.Guideline
-        android:id="@+id/guideline_center"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        app:layout_constraintGuide_percent="0.4" />
-
     <androidx.cardview.widget.CardView
         android:id="@+id/icon_check_container"
         android:layout_width="120dp"
         android:layout_height="120dp"
-        android:layout_marginBottom="24dp"
         app:cardBackgroundColor="#FFFFFF"
         app:cardCornerRadius="60dp"
         app:cardElevation="8dp"
         app:layout_constraintBottom_toTopOf="@id/text_title_complete"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent">
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_chainStyle="packed"
+        app:layout_constraintVertical_bias="0.5">
 
         <ImageView
             android:id="@+id/icon_check"
@@ -33,31 +28,33 @@
             android:src="@drawable/ic_check_circle"
             app:tint="#60B6D7" />
 
-    </androidx.cardview.widget.CardView>
-
-    <TextView
-        android:id="@+id/text_title_complete"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="You're All Set!"
-        android:textColor="#2C3E50"
-        android:textSize="32sp"
-        android:textStyle="bold"
-        app:layout_constraintBottom_toTopOf="@+id/guideline_center"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent" />
+    </androidx.cardview.widget.CardView> <TextView
+    android:id="@+id/text_title_complete"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="24dp"
+    android:text="You're All Set!"
+    android:textColor="#2C3E50"
+    android:textSize="32sp"
+    android:textStyle="bold"
+    app:layout_constraintBottom_toTopOf="@id/text_subtitle_complete"
+    app:layout_constraintEnd_toEndOf="parent"
+    app:layout_constraintStart_toStartOf="parent"
+    app:layout_constraintTop_toBottomOf="@id/icon_check_container" />
 
     <TextView
         android:id="@+id/text_subtitle_complete"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
-        android:gravity="center"
+        android.gravity="center"
         android:text="GuardianAI is now protecting your device."
         android:textColor="#7F8C8D"
         android:textSize="18sp"
+        app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/text_title_complete" />
+        app:layout_constraintTop_toBottomOf="@id/text_title_complete"
+        app:layout_constraintVertical_bias="0" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

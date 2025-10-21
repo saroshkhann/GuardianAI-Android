@@ -5,60 +5,43 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#FFFFFF"
-    tools:context=".OnboardingActivity">
+    android:padding="24dp"> <ImageView
+    android:id="@+id/image_phone_graphic"
+    android:layout_width="250dp"
+    android:layout_height="250dp"
+    android:src="@drawable/ic_phone_graphic"
+    android:scaleType="fitCenter"
+    app:layout_constraintBottom_toTopOf="@+id/text_title"
+    app:layout_constraintEnd_toEndOf="parent"
+    app:layout_constraintStart_toStartOf="parent"
+    app:layout_constraintTop_toTopOf="parent"
+    app:layout_constraintVertical_chainStyle="packed"
+    app:layout_constraintVertical_bias="0.3" /> <TextView
+    android:id="@+id/text_title"
+    android:layout_width="0dp"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="32dp" android:gravity="center"
+    android:text="GuardianAI monitors your device's sensors and permissions to protect your privacy in real time."
+    android:textColor="#2C3E50"
+    android:textSize="22sp"
+    android:textStyle="bold"
+    app:layout_constraintBottom_toTopOf="@id/text_privacy_notice"
+    app:layout_constraintEnd_toEndOf="parent"
+    app:layout_constraintStart_toStartOf="parent"
+    app:layout_constraintTop_toBottomOf="@id/image_phone_graphic" />
 
-    <!-- Main phone graphic -->
-    <ImageView
-        android:id="@+id/image_phone_graphic"
-        android:layout_width="250dp"
-        android:layout_height="250dp"
-        android:src="@drawable/ic_phone_graphic"
-        android:scaleType="fitCenter"
-        app:layout_constraintBottom_toTopOf="@+id/text_title"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.4" />
-
-    <!-- Title Text -->
-    <TextView
-        android:id="@+id/text_title"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="32dp"
-        android:layout_marginEnd="32dp"
-        android:gravity="center"
-        android:text="GuardianAI monitors your device's sensors and permissions to protect your privacy in real time."
-        android:textColor="#2C3E50"
-        android:textSize="22sp"
-        android:textStyle="bold"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
-
-    <!-- Privacy Notice -->
     <TextView
         android:id="@+id/text_privacy_notice"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginStart="48dp"
-        android:layout_marginEnd="48dp"
         android:layout_marginTop="24dp"
         android:background="@drawable/notice_background"
         android:gravity="center"
         android:padding="16dp"
         android:text="We'll never collect your personal data — everything stays on your device."
         android:textColor="#7F8C8D"
+        app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/text_title" />
-
-
-
-
-
-
-
-
-</androidx.constraintlayout.widget.ConstraintLayout>
+        app:layout_constraintTop_toBottomOf="@id/text_title"
+        app:layout_constraintVertical_bias="0.7"/> </androidx.constraintlayout.widget.ConstraintLayout>
