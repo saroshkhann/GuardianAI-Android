@@ -205,23 +205,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent">
 
-            <LinearLayout android:orientation="horizontal" android:gravity="center_vertical" android:padding="16dp" android:layout_width="match_parent" android:layout_height="wrap_content">
-                <ImageView android:src="@drawable/ic_risk_medium" android:background="@drawable/risk_card_medium_bg" android:padding="8dp" app:tint="#F0AD4E" android:layout_width="40dp" android:layout_height="40dp" android:layout_marginEnd="12dp"/>
-                <TextView android:text="An app accessed your clipbo..." android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:textColor="#2C3E50"/>
-                <ImageView android:src="@drawable/ic_chevron_right" app:tint="#7F8C8D" android:layout_width="24dp" android:layout_height="24dp"/>
-            </LinearLayout>
 
-            <LinearLayout android:orientation="horizontal" android:gravity="center_vertical" android:padding="16dp" android:layout_width="match_parent" android:layout_height="wrap_content">
-                <ImageView android:src="@drawable/ic_camera" android:background="@drawable/risk_card_low_bg" android:padding="8dp" app:tint="#60B6D7" android:layout_width="40dp" android:layout_height="40dp" android:layout_marginEnd="12dp"/>
-                <TextView android:text="Review unused camera permi..." android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:textColor="#2C3E50"/>
-                <ImageView android:src="@drawable/ic_chevron_right" app:tint="#7F8C8D" android:layout_width="24dp" android:layout_height="24dp"/>
-            </LinearLayout>
-
-            <LinearLayout android:orientation="horizontal" android:gravity="center_vertical" android:padding="16dp" android:layout_width="match_parent" android:layout_height="wrap_content">
-                <ImageView android:src="@drawable/ic_risk_medium" android:background="@drawable/risk_card_medium_bg" android:padding="8dp" app:tint="#F0AD4E" android:layout_width="40dp" android:layout_height="40dp" android:layout_marginEnd="12dp"/>
-                <TextView android:text="Check permissions for mediu..." android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:textColor="#2C3E50"/>
-                <ImageView android:src="@drawable/ic_chevron_right" app:tint="#7F8C8D" android:layout_width="24dp" android:layout_height="24dp"/>
-            </LinearLayout>
 
         </LinearLayout>
     </androidx.constraintlayout.widget.ConstraintLayout>

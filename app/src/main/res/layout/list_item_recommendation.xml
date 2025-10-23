@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingTop="12dp"
+    android:paddingBottom="12dp"
+    android:paddingStart="16dp"
+    android:paddingEnd="16dp"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="?android:attr/selectableItemBackground">
+
+    <ImageView
+        android:id="@+id/recommendation_icon"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_marginEnd="16dp"
+        android:src="@drawable/ic_risk_medium"
+        android:background="@drawable/risk_card_medium_bg"
+        android:padding="8dp"
+        app:tint="#F0AD4E"/>
+
+    <TextView
+        android:id="@+id/recommendation_text"
+        android:text="Recommendation text goes here..."
+        android:layout_width="0dp"
+        android:layout_weight="1"
+        android:layout_height="wrap_content"
+        android:textColor="#2C3E50"
+        android:textSize="14sp"/>
+
+    <ImageView
+        android:id="@+id/recommendation_chevron"
+        android:src="@drawable/ic_chevron_right"
+        app:tint="#B0B0B0"
+        android:layout_width="24dp"
+        android:layout_height="24dp"/>
+</LinearLayout>
