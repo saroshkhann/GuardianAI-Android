@@ -1,6 +1,8 @@
 package com.example.guardianai;
 
+import android.content.Context; // Needed for Context
 import android.content.Intent; // Needed for Intent
+import android.content.SharedPreferences; // Needed for SharedPreferences
 import android.content.pm.ApplicationInfo; // Needed for app info
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
@@ -15,7 +17,6 @@ import android.widget.ImageView; // Needed for ImageView
 import android.widget.LinearLayout; // Needed for LinearLayout
 import android.widget.TextView;
 import android.widget.Toast; // For user messages
-import android.content.Context;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -26,8 +27,10 @@ import com.google.android.material.progressindicator.CircularProgressIndicator;
 
 import java.util.ArrayList; // Needed for ArrayList
 import java.util.HashMap;   // Needed for HashMap
+import java.util.HashSet;   // Needed for HashSet
 import java.util.List;
 import java.util.Map;       // Needed for Map
+import java.util.Set;      // Needed for Set
 
 public class DashboardFragment extends Fragment {
 
@@ -62,8 +65,6 @@ public class DashboardFragment extends Fragment {
         // Initialize our permission analysis engine
         analyzer = new PermissionAnalyzer();
 
-        // **IMPORTANT:** Scan is MOVED from here to onViewCreated
-
         return view; // Return the created view
     }
 
@@ -73,7 +74,7 @@ public class DashboardFragment extends Fragment {
         super.onViewCreated(view, savedInstanceState);
         Log.d("DashboardFragment", "onViewCreated called");
 
-        // --- CALL THE SCAN HERE ---
+        // --- Start the Scan ---
         // Now that the view is definitely created and ready, start the scan.
         scanDevicePermissions();
     }
@@ -101,12 +102,12 @@ public class DashboardFragment extends Fragment {
         Log.d("DashboardFragment", "Starting permission scan...");
 
         // Safety check for context
-        if (getActivity() == null || getActivity().getPackageManager() == null) {
-            Log.e("DashboardFragment", "Activity or PackageManager is null during scan.");
-            // Maybe show an error to the user or retry later
+        Context context = getContext(); // Get context once
+        if (context == null || context.getPackageManager() == null) {
+            Log.e("DashboardFragment", "Context or PackageManager is null during scan.");
             return;
         }
-        PackageManager pm = getActivity().getPackageManager();
+        PackageManager pm = context.getPackageManager();
 
         // Initialize the map to store categorized apps
         categorizedApps = new HashMap<>();
@@ -127,34 +128,26 @@ public class DashboardFragment extends Fragment {
 
         // Loop through each installed app
         for (PackageInfo pkgInfo : installedApps) {
-            // Check if it's a user-installed app (not part of the Android system)
-            // Use try-catch for safety, ApplicationInfo might be null
             try {
                 if (pkgInfo != null && pkgInfo.applicationInfo != null && (pkgInfo.applicationInfo.flags & ApplicationInfo.FLAG_SYSTEM) == 0) {
                     totalUserAppsScanned++;
-                    String packageName = pkgInfo.packageName; // Get the unique app identifier
+                    String packageName = pkgInfo.packageName;
                     boolean appHasHighRisk = false;
                     boolean appHasMediumRisk = false;
                     boolean appHasLowRisk = false;
 
-                    String[] permissions = pkgInfo.requestedPermissions; // Get the list of permissions the app asks for
+                    String[] permissions = pkgInfo.requestedPermissions;
 
-                    // Check if the app actually requested any permissions
                     if (permissions != null && permissions.length > 0) {
-                        // Loop through each permission requested by this app
                         for (String permission : permissions) {
-                            // Use our analyzer to determine the risk level of this permission
                             PermissionAnalyzer.RiskLevel risk = analyzer.getPermissionRisk(permission);
-                            // Track the highest risk level found for this specific app
                             switch (risk) {
                                 case HIGH:   appHasHighRisk = true; break;
                                 case MEDIUM: appHasMediumRisk = true; break;
                                 case LOW:    appHasLowRisk = true; break;
-                                // NO_RISK doesn't affect categorization priority
                             }
                         }
 
-                        // Categorize the app based on its highest risk permission found
                         if (appHasHighRisk) {
                             categorizedApps.get(PermissionAnalyzer.RiskLevel.HIGH).add(packageName);
                         } else if (appHasMediumRisk) {
@@ -162,11 +155,9 @@ public class DashboardFragment extends Fragment {
                         } else if (appHasLowRisk) {
                             categorizedApps.get(PermissionAnalyzer.RiskLevel.LOW).add(packageName);
                         } else {
-                            // If it had permissions but none were High/Medium/Low, it's No Risk
                             categorizedApps.get(PermissionAnalyzer.RiskLevel.NO_RISK).add(packageName);
                         }
                     } else {
-                        // App requested zero permissions - definitely No Risk
                         categorizedApps.get(PermissionAnalyzer.RiskLevel.NO_RISK).add(packageName);
                     }
                 }
@@ -175,32 +166,58 @@ public class DashboardFragment extends Fragment {
             }
         } // End of app loop
 
-        // Get the final counts from the categorized lists (check for null safety)
+        // Get the final counts
         highRiskCount = (categorizedApps.get(PermissionAnalyzer.RiskLevel.HIGH) != null) ? categorizedApps.get(PermissionAnalyzer.RiskLevel.HIGH).size() : 0;
         mediumRiskCount = (categorizedApps.get(PermissionAnalyzer.RiskLevel.MEDIUM) != null) ? categorizedApps.get(PermissionAnalyzer.RiskLevel.MEDIUM).size() : 0;
         lowRiskCount = (categorizedApps.get(PermissionAnalyzer.RiskLevel.LOW) != null) ? categorizedApps.get(PermissionAnalyzer.RiskLevel.LOW).size() : 0;
         noRiskCount = (categorizedApps.get(PermissionAnalyzer.RiskLevel.NO_RISK) != null) ? categorizedApps.get(PermissionAnalyzer.RiskLevel.NO_RISK).size() : 0;
 
         // --- Generate Recommendations ---
-        recommendations = new ArrayList<>(); // Create the empty list
+        recommendations = new ArrayList<>();
 
-        // Apply Rule 1
+        // Rule 1: High Risk Apps
         if (highRiskCount > 0) {
-            recommendations.add("Review " + highRiskCount + " high-risk apps"); // Add message to list
+            recommendations.add("Review " + highRiskCount + " high-risk apps");
         }
-        // Apply Rule 2
+        // Rule 2: Medium Risk Apps
         if (mediumRiskCount > 0) {
-            recommendations.add("Check permissions for " + mediumRiskCount + " medium-risk apps"); // Add message to list
+            recommendations.add("Check permissions for " + mediumRiskCount + " medium-risk apps");
         }
-        // TODO: Add rules/logic here to fetch "unused app" recommendations from the database later
+
+        // Rule 3: Unused Risky Apps (Read from SharedPreferences)
+        SharedPreferences prefs = context.getSharedPreferences("GuardianAIPrefs", Context.MODE_PRIVATE);
+        // Default to an empty set if not found
+        Set<String> unusedPackages = prefs.getStringSet("unused_risky_apps", new HashSet<>());
+
+        if (unusedPackages != null && !unusedPackages.isEmpty()) {
+            Log.d("DashboardFragment", "Found " + unusedPackages.size() + " unused risky apps from SharedPreferences.");
+            for (String packageName : unusedPackages) {
+                try {
+                    ApplicationInfo appInfo = pm.getApplicationInfo(packageName, 0);
+                    String appName = appInfo.loadLabel(pm).toString();
+                    // Add recommendation text including the package name for later extraction
+                    recommendations.add("Review unused permissions for '" + appName + "' (" + packageName + ")");
+                } catch (PackageManager.NameNotFoundException e) {
+                    Log.w("DashboardFragment", "Could not get app name for unused package: " + packageName);
+                    // Add recommendation with just package name as fallback
+                    recommendations.add("Review unused permissions for package: (" + packageName + ")");
+                } catch (Exception e) {
+                    Log.e("DashboardFragment", "Error getting app info for unused package: " + packageName, e);
+                }
+            }
+        } else {
+            Log.d("DashboardFragment", "No unused risky apps found in SharedPreferences.");
+        }
+        // --- End Unused App Recommendations ---
+
 
         // --- Calculate Privacy Score ---
         int score = 100;
-        if (totalUserAppsScanned > 0) { // Avoid division by zero
-            double highRiskPenalty = (double) highRiskCount / totalUserAppsScanned * 50; // Max 50 points penalty
-            double mediumRiskPenalty = (double) mediumRiskCount / totalUserAppsScanned * 25; // Max 25 points penalty
+        if (totalUserAppsScanned > 0) {
+            double highRiskPenalty = (double) highRiskCount / totalUserAppsScanned * 50;
+            double mediumRiskPenalty = (double) mediumRiskCount / totalUserAppsScanned * 25;
             score = (int) (100 - highRiskPenalty - mediumRiskPenalty);
-            if (score < 0) score = 0; // Ensure score doesn't go below 0
+            if (score < 0) score = 0;
         }
 
         // --- Log Final Results Before UI Update ---
@@ -219,20 +236,19 @@ public class DashboardFragment extends Fragment {
 
     // --- Helper Method to Update the UI Elements ---
     private void updateDashboardUI(int score, int high, int medium, int low, int no, List<String> currentRecommendations) {
-        Log.d("DashboardFragment", "updateDashboardUI called with Score: " + score + ", High: " + high + ", Medium: " + medium); // Log entry
+        Log.d("DashboardFragment", "updateDashboardUI called with Score: " + score + ", High: " + high + ", Medium: " + medium);
 
         // Ensure UI elements are not null AND fragment is still attached before updating
-        // Use getView() and getContext() inside this method for safety
         View fragmentView = getView();
         Context context = getContext();
         if (fragmentView == null || context == null) {
             Log.e("DashboardFragment", "View or Context is null in updateDashboardUI - Cannot update UI.");
-            return; // Exit if fragment is not attached properly
+            return;
         }
 
         // Update Score and Progress Bar
         if (progressText != null) progressText.setText(String.valueOf(score));
-        if (progressBar != null) progressBar.setProgress(score, true); // Animate progress change
+        if (progressBar != null) progressBar.setProgress(score, true);
 
         // Update Risk Card Text
         if (highRiskText != null) highRiskText.setText("High Risk (" + high + ")");
@@ -245,45 +261,35 @@ public class DashboardFragment extends Fragment {
             Log.e("DashboardFragment", "Cannot update recommendations, recommendationsLayout is null.");
             return;
         }
+        recommendationsLayout.removeAllViews(); // Clear previous items
 
-        // IMPORTANT: Clear out any old views that might be inside it
-        recommendationsLayout.removeAllViews();
-
-        // Get a tool to create views from XML layouts
         LayoutInflater inflater = LayoutInflater.from(context);
 
-        // Check if the recommendations list is empty
         if (currentRecommendations == null || currentRecommendations.isEmpty()) {
-            Log.d("DashboardFragment", "No recommendations to display."); // Log empty case
-            // If empty, show a default message
+            Log.d("DashboardFragment", "No recommendations to display.");
             TextView noRecsTextView = new TextView(context);
             noRecsTextView.setText("No specific recommendations right now. Stay vigilant!");
-            // Add some styling
-            noRecsTextView.setPadding(dpToPx(16), dpToPx(16), dpToPx(16), dpToPx(16)); // Use helper for dp
-            noRecsTextView.setTextColor(ContextCompat.getColor(context, android.R.color.darker_gray)); // Use ContextCompat
-            recommendationsLayout.addView(noRecsTextView); // Add the message view to the layout
+            noRecsTextView.setPadding(dpToPx(16), dpToPx(16), dpToPx(16), dpToPx(16));
+            noRecsTextView.setTextColor(ContextCompat.getColor(context, android.R.color.darker_gray));
+            recommendationsLayout.addView(noRecsTextView);
         } else {
-            Log.d("DashboardFragment", "Displaying " + currentRecommendations.size() + " recommendations."); // Log how many items
-            // If there are recommendations, loop through each message string
+            Log.d("DashboardFragment", "Displaying " + currentRecommendations.size() + " recommendations.");
             for (String recText : currentRecommendations) {
-                try { // Add try-catch for safety during inflation/view finding
-                    // Create a new row View from the list_item_recommendation.xml layout
+                try {
                     View itemView = inflater.inflate(R.layout.list_item_recommendation, recommendationsLayout, false);
-
-                    // Find elements inside the row layout
                     TextView recTextView = itemView.findViewById(R.id.recommendation_text);
                     ImageView recIcon = itemView.findViewById(R.id.recommendation_icon);
-                    ImageView recChevron = itemView.findViewById(R.id.recommendation_chevron); // Assuming you added this ID
+                    // ImageView recChevron = itemView.findViewById(R.id.recommendation_chevron); // Find if needed
 
                     if (recTextView != null) {
                         recTextView.setText(recText);
-                        Log.d("DashboardFragment", "Added recommendation item: " + recText); // Log successful add
+                        Log.d("DashboardFragment", "Added recommendation item: " + recText);
                     } else {
                         Log.e("DashboardFragment", "TextView recommendation_text not found in list_item_recommendation.xml");
                     }
 
-                    // Set appropriate icon based on recommendation type (Example Logic)
-                    if (recIcon != null) { // Check if icon exists
+                    // Set appropriate icon based on recommendation type
+                    if (recIcon != null) {
                         if (recText.contains("high-risk")) {
                             recIcon.setImageResource(R.drawable.ic_risk_high);
                             recIcon.setBackgroundResource(R.drawable.risk_card_high_bg);
@@ -292,9 +298,9 @@ public class DashboardFragment extends Fragment {
                             recIcon.setImageResource(R.drawable.ic_risk_medium);
                             recIcon.setBackgroundResource(R.drawable.risk_card_medium_bg);
                             recIcon.setColorFilter(ContextCompat.getColor(context, R.color.medium_risk_color));
-                        } else if (recText.contains("unused")) { // Example for unused apps
-                            recIcon.setImageResource(R.drawable.ic_history); // Make sure you have this icon
-                            recIcon.setBackgroundResource(R.drawable.notice_background);
+                        } else if (recText.contains("unused")) { // Check for unused app recommendation
+                            recIcon.setImageResource(R.drawable.ic_history); // Use history icon
+                            recIcon.setBackgroundResource(R.drawable.notice_background); // Use generic background
                             recIcon.setColorFilter(ContextCompat.getColor(context, R.color.default_recommendation_color));
                         } else {
                             // Default icon/color for other types
@@ -306,21 +312,17 @@ public class DashboardFragment extends Fragment {
                         Log.e("DashboardFragment", "ImageView recommendation_icon not found in list_item_recommendation.xml");
                     }
 
-                    // Add the newly created row View to the main recommendations layout
                     recommendationsLayout.addView(itemView);
 
                     // --- ADD CLICK LISTENER TO THE ITEM VIEW ---
                     itemView.setOnClickListener(v -> {
                         Log.d("DashboardFragment", "Recommendation clicked: " + recText);
-                        // Determine action based on the recommendation text
                         if (recText.contains("high-risk")) {
-                            // If the text mentions high-risk, navigate to the high-risk app list
                             navigateToAppList(PermissionAnalyzer.RiskLevel.HIGH);
                         } else if (recText.contains("medium-risk")) {
-                            // If the text mentions medium-risk, navigate to the medium-risk app list
                             navigateToAppList(PermissionAnalyzer.RiskLevel.MEDIUM);
                         } else if (recText.contains("unused")) {
-                            // --- NEW: Handle unused app click ---
+                            // --- Handle unused app click ---
                             String packageName = extractPackageNameFromRecommendation(recText); // Get package name
                             if (packageName != null) {
                                 openAppSettings(packageName); // Open settings for that specific app
@@ -328,13 +330,13 @@ public class DashboardFragment extends Fragment {
                                 Toast.makeText(getActivity(), "Could not identify app for this recommendation.", Toast.LENGTH_SHORT).show();
                             }
                         } else {
-                            // For any other recommendations (like clipboard - added later)
+                            // For other recommendations
                             Toast.makeText(getActivity(), "More info for: " + recText, Toast.LENGTH_SHORT).show();
                         }
                     });
                     // --- END OF ADDED CLICK LISTENER ---
                 } catch (Exception e) {
-                    Log.e("DashboardFragment", "Error inflating/adding recommendation item for '" + recText + "'", e); // Log any errors
+                    Log.e("DashboardFragment", "Error inflating/adding recommendation item for '" + recText + "'", e);
                 }
             } // End of for loop
         } // End of else block
@@ -345,7 +347,6 @@ public class DashboardFragment extends Fragment {
     // --- Helper Method to Set Up Click Listeners for Risk Cards ---
     private void setupCardClickListeners() {
         Log.d("DashboardFragment", "Setting up card click listeners...");
-        // Set onClickListeners - they call navigateToAppList with the correct risk level
         if (highRiskCard != null) highRiskCard.setOnClickListener(v -> navigateToAppList(PermissionAnalyzer.RiskLevel.HIGH));
         if (mediumRiskCard != null) mediumRiskCard.setOnClickListener(v -> navigateToAppList(PermissionAnalyzer.RiskLevel.MEDIUM));
         if (lowRiskCard != null) lowRiskCard.setOnClickListener(v -> navigateToAppList(PermissionAnalyzer.RiskLevel.LOW));
@@ -356,10 +357,8 @@ public class DashboardFragment extends Fragment {
     // --- Helper Method to Navigate to the App List Screen ---
     private void navigateToAppList(PermissionAnalyzer.RiskLevel riskLevel) {
         Log.d("DashboardFragment", "navigateToAppList called for: " + riskLevel);
-        // Safety check before accessing map
         if (getActivity() == null || categorizedApps == null || categorizedApps.get(riskLevel) == null) {
             Log.e("DashboardFragment", "App data not ready or risk level not found for: " + riskLevel);
-            // Provide feedback to the user
             if (getActivity() != null) {
                 Toast.makeText(getActivity(), "App data is still loading or unavailable.", Toast.LENGTH_SHORT).show();
             }
@@ -370,20 +369,15 @@ public class DashboardFragment extends Fragment {
 
         if (appPackageNames != null && !appPackageNames.isEmpty()) {
             Log.d("DashboardFragment", "Navigating to AppList for " + riskLevel + " with " + appPackageNames.size() + " apps.");
-
-            // Create the new fragment instance
             AppListFragment appListFragment = new AppListFragment();
-
-            // Create a Bundle to pass data (risk level and package names)
             Bundle args = new Bundle();
             args.putSerializable("RISK_LEVEL", riskLevel);
-            args.putStringArrayList("APP_PACKAGES", new ArrayList<>(appPackageNames)); // Pass a copy
+            args.putStringArrayList("APP_PACKAGES", new ArrayList<>(appPackageNames));
             appListFragment.setArguments(args);
 
-            // Use FragmentManager to replace the current dashboard with the app list screen
             getParentFragmentManager().beginTransaction()
-                    .replace(R.id.fragment_container, appListFragment) // Replace content in MainActivity's container
-                    .addToBackStack("dashboard") // Allows the user to press 'Back' to return to the dashboard
+                    .replace(R.id.fragment_container, appListFragment)
+                    .addToBackStack("dashboard")
                     .commit();
         } else {
             Log.d("DashboardFragment", "No apps found for risk level: " + riskLevel);
@@ -393,31 +387,35 @@ public class DashboardFragment extends Fragment {
         }
     }
 
-    // --- PASTE THE NEW HELPER METHODS HERE ---
-
-    // Example helper to extract package name (needs refinement)
+    // --- Helper to extract package name from recommendation text ---
     private String extractPackageNameFromRecommendation(String recommendationText) {
-        // This is a basic example, assumes format "Review unused permissions for 'AppName'"
-        // For this to work, you MUST store the package name when the recommendation is created by UnusedAppWorker.
-        // For now, it returns null. You need to implement the logic to retrieve the package name associated with this text.
-        Log.w("DashboardFragment", "extractPackageNameFromRecommendation needs proper implementation! Cannot get package name from: " + recommendationText);
-        // Example (IF you store the package name in the recommendation text like "Review... for 'App' (com.example.app)"):
-        // int start = recommendationText.indexOf('(');
-        // int end = recommendationText.indexOf(')');
-        // if (start != -1 && end != -1 && start < end) {
-        //     return recommendationText.substring(start + 1, end);
-        // }
-        return null; // Placeholder - Requires implementation
+        // Assumes format "... ('AppName') (packageName)" or "... package: (packageName)"
+        int startIndex = recommendationText.lastIndexOf('(');
+        int endIndex = recommendationText.lastIndexOf(')');
+
+        if (startIndex != -1 && endIndex != -1 && startIndex < endIndex) {
+            String potentialPackageName = recommendationText.substring(startIndex + 1, endIndex);
+            Log.d("DashboardFragment", "Extracted potential package name: " + potentialPackageName);
+            // Basic validation: check if it contains at least one dot
+            if (potentialPackageName.contains(".")) {
+                return potentialPackageName;
+            } else {
+                Log.w("DashboardFragment", "Extracted text doesn't look like a package name: " + potentialPackageName);
+            }
+        } else {
+            Log.w("DashboardFragment", "Could not find package name in parentheses format in: " + recommendationText);
+        }
+        return null; // Return null if extraction fails
     }
 
-    // Opens the system settings page for a specific app
+    // --- Helper to open the system settings page for a specific app ---
     private void openAppSettings(String packageName) {
         Log.d("DashboardFragment", "Attempting to open settings for: " + packageName);
-        // Safety check
-        if (packageName == null || packageName.isEmpty() || getActivity() == null) {
-            Log.e("DashboardFragment", "Cannot open app settings - invalid package name or activity is null");
-            if (getActivity() != null) {
-                Toast.makeText(getActivity(), "Could not open settings for this app.", Toast.LENGTH_SHORT).show();
+        Context context = getContext();
+        if (packageName == null || packageName.isEmpty() || context == null) {
+            Log.e("DashboardFragment", "Cannot open app settings - invalid package name or context is null");
+            if (context != null) {
+                Toast.makeText(context, "Could not open settings for this app.", Toast.LENGTH_SHORT).show();
             }
             return;
         }
@@ -427,20 +425,18 @@ public class DashboardFragment extends Fragment {
             intent.setData(uri);
             startActivity(intent);
         } catch (Exception e) {
-            Log.e("DashboardFragment", "Failed to open app settings for " + packageName, e);
-            if (getActivity() != null) {
-                Toast.makeText(getActivity(), "Could not open settings for this app.", Toast.LENGTH_SHORT).show();
-            }
+            Log.e("DashboardFragment", "Failed to open app settings activity for " + packageName, e);
+            Toast.makeText(context, "Could not open settings activity for this app.", Toast.LENGTH_SHORT).show();
         }
     }
 
     // --- Helper to convert dp to pixels ---
     private int dpToPx(int dp) {
-        // Safety check for context
-        if (getContext() == null || getResources() == null || getResources().getDisplayMetrics() == null) {
+        Context context = getContext();
+        if (context == null || context.getResources() == null || context.getResources().getDisplayMetrics() == null) {
             return dp; // Basic fallback
         }
-        float density = getResources().getDisplayMetrics().density;
+        float density = context.getResources().getDisplayMetrics().density;
         return Math.round((float) dp * density);
     }
 } // End of DashboardFragment class
