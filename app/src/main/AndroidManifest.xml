@@ -38,6 +38,16 @@
         <activity
             android:name=".MainActivity"
             android:exported="true" />
+
+        <receiver
+            android:name=".AppUpdateReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.PACKAGE_REPLACED" />
+                <data android:scheme="package" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>
