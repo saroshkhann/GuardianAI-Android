@@ -12,6 +12,7 @@ import androidx.core.content.ContextCompat;
 import androidx.viewpager2.widget.ViewPager2;
 import java.util.ArrayList;
 import java.util.List;
+import android.content.Intent;
 
 public class OnboardingActivity extends AppCompatActivity {
 
@@ -53,9 +54,10 @@ public class OnboardingActivity extends AppCompatActivity {
             if (currentItem < adapter.getItemCount() - 1) {
                 viewPager.setCurrentItem(currentItem + 1);
             } else {
-                // Last page: navigate to main app or finish
-                Toast.makeText(this, "Onboarding Complete!", Toast.LENGTH_SHORT).show();
-                finish();
+                // Last page: Start MainActivity and finish onboarding
+                Intent intent = new Intent(OnboardingActivity.this, MainActivity.class);
+                startActivity(intent);
+                finish(); // Finish OnboardingActivity so the user can't go back
             }
         });
 
