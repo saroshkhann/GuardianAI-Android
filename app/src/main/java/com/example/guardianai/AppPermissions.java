@@ -1,4 +1,4 @@
-package com.example.guardianai.db; // Create a 'db' sub-package if you like
+package com.example.guardianai; // Create a 'db' sub-package if you like
 
 import androidx.annotation.NonNull;
 import androidx.room.Entity;

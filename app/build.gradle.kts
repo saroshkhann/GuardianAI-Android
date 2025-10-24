@@ -51,6 +51,10 @@ dependencies {
     implementation("androidx.room:room-runtime:$room_version")
     annotationProcessor("androidx.room:room-compiler:$room_version")
     implementation("androidx.work:work-runtime:2.8.1") // Or the latest version
+    // Lifecycle components (ViewModel & LiveData)
+    implementation("androidx.lifecycle:lifecycle-viewmodel:2.6.2") // Use latest stable version
+    implementation("androidx.lifecycle:lifecycle-livedata:2.6.2") // Use latest stable version
+    implementation("com.google.code.gson:gson:2.10.1") // Or latest version
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

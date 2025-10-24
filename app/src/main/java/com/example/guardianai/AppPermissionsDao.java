@@ -1,4 +1,4 @@
-package com.example.guardianai.db;
+package com.example.guardianai;
 
 import androidx.room.Dao;
 import androidx.room.Insert;

@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:background="#FFFFFF"
+    tools:context=".SettingsFragment">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Settings"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:textColor="#2C3E50"
+        android:layout_marginBottom="24dp"/>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Unused App Threshold:"
+        android:textSize="18sp"
+        android:textColor="#2C3E50"
+        android:layout_marginBottom="8dp"/>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Mark apps as unused if not opened for:"
+        android:textSize="14sp"
+        android:textColor="#7F8C8D"
+        android:layout_marginBottom="16dp"/>
+
+    <RadioGroup
+        android:id="@+id/radio_group_unused_threshold"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <RadioButton
+            android:id="@+id/radio_30_days"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="30 Days (Default)"
+            android:textSize="16sp"/>
+
+        <RadioButton
+            android:id="@+id/radio_60_days"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="60 Days"
+            android:textSize="16sp"/>
+
+        <RadioButton
+            android:id="@+id/radio_90_days"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="90 Days"
+            android:textSize="16sp"/>
+    </RadioGroup>
+
+</LinearLayout>

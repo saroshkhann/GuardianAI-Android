@@ -18,9 +18,9 @@ import androidx.work.Data; // Needed for input/output data
 import androidx.work.Worker;
 import androidx.work.WorkerParameters;
 
-import com.example.guardianai.db.AppDatabase;
-import com.example.guardianai.db.AppPermissions;
-import com.example.guardianai.db.AppPermissionsDao;
+import com.example.guardianai.AppDatabase;
+import com.example.guardianai.AppPermissions;
+import com.example.guardianai.AppPermissionsDao;
 
 import java.util.ArrayList;
 import java.util.Arrays;
