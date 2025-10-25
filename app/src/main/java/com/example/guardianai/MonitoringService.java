@@ -12,9 +12,9 @@ import android.app.usage.UsageStatsManager;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
-import android.content.SharedPreferences;
+import android.content.SharedPreferences; // Needed for perm status saving
 import android.content.pm.ApplicationInfo;
-import android.content.pm.PackageInfo;
+import android.content.pm.PackageInfo; // Needed for perm status checking
 import android.content.pm.PackageManager;
 import android.hardware.camera2.CameraManager;
 import android.location.Location;
@@ -86,7 +86,13 @@ public class MonitoringService extends Service implements LocationListener {
     private LocationManager locationManager;
     private Timer micCheckTimer;
     private boolean isMicInUse = false;
-    private static final long MIC_CHECK_INTERVAL_MS = 30000; // OPTIMIZATION: Increased to 30 seconds
+    private static final long MIC_CHECK_INTERVAL_MS = 30000; // OPTIMIZATION: 30 seconds
+
+    // --- Performance Optimization: Location Rate Limiting ---
+    private long lastLocationLogTime = 0; // Tracks last logged time in milliseconds
+    private static final long LOCATION_RATE_LIMIT_MS = 60000; // Limit to 1 log per 60 seconds (1 minute)
+
+    // --- Permission Status Monitoring ---
     private Timer permissionCheckTimer;
     private static final long PERMISSION_CHECK_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
     private SharedPreferences permissionStatusPrefs;
@@ -119,10 +125,9 @@ public class MonitoringService extends Service implements LocationListener {
         initializeClipboardMonitoring();
         initializeCameraMonitoring();
         initializeLocationMonitoring();
-        startMicMonitoring(); // Start timer for mic checks
-        initializePermissionStatusMonitoring(); // Init prefs and start timer
-
-    } // End onCreate
+        startMicMonitoring();
+        initializePermissionStatusMonitoring();
+    }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -175,29 +180,29 @@ public class MonitoringService extends Service implements LocationListener {
         } else { Log.e(TAG, "CameraManager is null."); }
     }
 
-    private void initializeLocationMonitoring() {
-        locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+     private void initializeLocationMonitoring() {
+         locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
         if (locationManager != null) {
             if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
-                    ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
                 Log.d(TAG, "Location permission OK, requesting updates.");
                 try {
-                    long minTimeMs = 15000; float minDistanceM = 50;
-                    boolean networkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
-                    boolean gpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
-                    if (networkEnabled) locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, minTimeMs, minDistanceM, this);
-                    if (gpsEnabled) locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, minTimeMs, minDistanceM, this);
-                    if (networkEnabled || gpsEnabled) Log.d(TAG, "Requested location updates.");
-                    else Log.w(TAG, "No location providers enabled.");
+                     long minTimeMs = 15000; float minDistanceM = 50;
+                     boolean networkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
+                     boolean gpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
+                     if (networkEnabled) locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, minTimeMs, minDistanceM, this);
+                     if (gpsEnabled) locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, minTimeMs, minDistanceM, this);
+                     if (networkEnabled || gpsEnabled) Log.d(TAG, "Requested location updates.");
+                     else Log.w(TAG, "No location providers enabled.");
                 } catch (SecurityException e) { Log.e(TAG, "SecurityException requesting location?", e); }
             } else { Log.w(TAG, "Location permission NOT granted."); }
         } else { Log.e(TAG, "LocationManager is null."); }
-    }
+     }
 
-    private void initializePermissionStatusMonitoring() {
-        permissionStatusPrefs = getSharedPreferences(PERM_STATUS_PREFS_NAME, Context.MODE_PRIVATE);
-        startPermissionStatusMonitoring();
-    }
+     private void initializePermissionStatusMonitoring() {
+         permissionStatusPrefs = getSharedPreferences(PERM_STATUS_PREFS_NAME, Context.MODE_PRIVATE);
+         startPermissionStatusMonitoring();
+     }
 
 
     // --- Core Logic Methods ---
@@ -215,31 +220,44 @@ public class MonitoringService extends Service implements LocationListener {
     /** Handles Sensor Usage Event (Camera, Location, Microphone). */
     private void handleSensorUsage(String sensorType) {
         Log.d(TAG, "Handling sensor usage event for: " + sensorType);
+        
+        // --- NEW: Location Rate Limiting Check ---
+        if ("LOCATION".equals(sensorType)) {
+            long currentTime = System.currentTimeMillis();
+            if (currentTime - lastLocationLogTime < LOCATION_RATE_LIMIT_MS) {
+                Log.d(TAG, "LOCATION event rate limited. Skipping DB save.");
+                return; // ABORT if rate limit applies
+            }
+            // If not limited, update the timestamp now
+            lastLocationLogTime = currentTime;
+        }
+        // --- END Rate Limiting Check ---
+
         String foregroundAppPackage = getForegroundAppPackageName();
         if (isValidStateForDbOperation(foregroundAppPackage)) {
             Log.i(TAG, sensorType + " accessed likely by: " + foregroundAppPackage);
-            // TODO: Implement rate limiting
+            // TODO: Implement rate limiting for other sensors if needed
             saveRecommendationToDb(foregroundAppPackage, sensorType);
         } else { logFailureReason(sensorType + " usage", foregroundAppPackage); }
     }
 
     /** Saves a recommendation to the database on a background thread. */
     private void saveRecommendationToDb(String packageName, String eventType) {
-        final String finalPackageName = packageName;
-        final String finalEventType = eventType;
-        final String recommendationType = eventType + "_ACCESS";
+         final String finalPackageName = packageName;
+         final String finalEventType = eventType;
+         final String recommendationType = eventType + "_ACCESS";
 
-        databaseExecutor.execute(() -> {
-            Log.d(TAG, "BG Task: Saving " + finalEventType + " recommendation for " + finalPackageName);
-            String appName = getAppNameFromPackage(finalPackageName);
-            String title = finalEventType.substring(0, 1).toUpperCase() + finalEventType.substring(1).toLowerCase() + " Access";
-            String description = "'" + appName + "' accessed your " + finalEventType.toLowerCase();
-            Recommendation rec = new Recommendation(title, description, recommendationType, finalPackageName);
-            try {
-                recommendationDao.insertRecommendation(rec);
-                Log.d(TAG, "BG Task: Saved " + recommendationType + " recommendation for: " + appName);
-            } catch (Exception e) { Log.e(TAG, "BG Task: Error inserting " + recommendationType + " rec for " + finalPackageName, e); }
-        });
+         databaseExecutor.execute(() -> {
+                Log.d(TAG, "BG Task: Saving " + finalEventType + " recommendation for " + finalPackageName);
+                String appName = getAppNameFromPackage(finalPackageName);
+                String title = finalEventType.substring(0, 1).toUpperCase() + finalEventType.substring(1).toLowerCase() + " Access";
+                String description = "'" + appName + "' accessed your " + finalEventType.toLowerCase();
+                Recommendation rec = new Recommendation(title, description, recommendationType, finalPackageName);
+                try {
+                    recommendationDao.insertRecommendation(rec);
+                    Log.d(TAG, "BG Task: Saved " + recommendationType + " recommendation for: " + appName);
+                } catch (Exception e) { Log.e(TAG, "BG Task: Error inserting " + recommendationType + " rec for " + finalPackageName, e); }
+            });
     }
 
     /** Checks if DAO, Executor are ready and package name is valid. */
@@ -247,16 +265,16 @@ public class MonitoringService extends Service implements LocationListener {
         return packageName != null && recommendationDao != null && databaseExecutor != null && !databaseExecutor.isShutdown();
     }
 
-    /** Logs reasons why a DB operation might fail. */
+     /** Logs reasons why a DB operation might fail. */
     private void logFailureReason(String eventDescription, String packageName) {
-        if (packageName == null) Log.w(TAG, "Could not determine foreground app during " + eventDescription + ".");
-        if (recommendationDao == null) Log.e(TAG, "RecommendationDao is null during " + eventDescription + ".");
-        if (databaseExecutor == null || databaseExecutor.isShutdown()) Log.e(TAG, "DB Executor invalid during " + eventDescription + ".");
+         if (packageName == null) Log.w(TAG, "Could not determine foreground app during " + eventDescription + ".");
+         if (recommendationDao == null) Log.e(TAG, "RecommendationDao is null during " + eventDescription + ".");
+         if (databaseExecutor == null || databaseExecutor.isShutdown()) Log.e(TAG, "DB Executor invalid during " + eventDescription + ".");
     }
 
     // --- LocationListener Implementation ---
     @Override public void onLocationChanged(@NonNull Location location) { Log.w(TAG, "Location changed event."); handleSensorUsage("LOCATION"); }
-
+    
     // --- FIX FOR ANDROID 7.0 CRASH ---
     @Override
     public void onStatusChanged(String provider, int status, Bundle extras) {
@@ -264,7 +282,7 @@ public class MonitoringService extends Service implements LocationListener {
         Log.d(TAG, "Location status changed for provider " + provider + ": status=" + status);
     }
     // --- END FIX ---
-
+    
     @Override public void onProviderEnabled(@NonNull String provider) { Log.d(TAG, "Location provider enabled: " + provider); }
     @Override public void onProviderDisabled(@NonNull String provider) { Log.d(TAG, "Location provider disabled: " + provider); }
     // --- End LocationListener ---
@@ -287,8 +305,8 @@ public class MonitoringService extends Service implements LocationListener {
 
     private void checkMicrophoneStatus() {
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            if (isMicInUse) isMicInUse = false;
-            return; // Cannot check without permission
+             if (isMicInUse) isMicInUse = false;
+             return; // Cannot check without permission
         }
         boolean micBusy = isMicrophoneInUse();
         if (micBusy && !isMicInUse) {
@@ -298,7 +316,6 @@ public class MonitoringService extends Service implements LocationListener {
         }
     }
 
-    // Includes the permission check fix
     private boolean isMicrophoneInUse() {
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             return false;
@@ -345,6 +362,7 @@ public class MonitoringService extends Service implements LocationListener {
         RecommendationDao recDao = AppDatabase.getDatabase(context).recommendationDao();
         if (recDao == null) { Log.e(TAG, "BG Task: DAO is null, cannot check perm status."); return; }
 
+
         Map<String, Map<String, Boolean>> lastStatuses = loadPermissionStatuses();
         Map<String, Map<String, Boolean>> currentStatuses = new HashMap<>();
         List<PackageInfo> installedApps;
@@ -364,9 +382,9 @@ public class MonitoringService extends Service implements LocationListener {
                         boolean wasGranted = appLastStatus.getOrDefault(permission, false);
 
                         if (isGranted != wasGranted) { // If status changed
-                            Log.w(TAG, "PERMISSION " + (isGranted ? "GRANTED" : "REVOKED") + ": " + packageName + " -> " + permission);
-                            String appName = getAppNameFromPackage(packageName);
-                            savePermissionChangeRecommendation(recDao, appName, packageName, permission, isGranted);
+                             Log.w(TAG, "PERMISSION " + (isGranted ? "GRANTED" : "REVOKED") + ": " + packageName + " -> " + permission);
+                             String appName = getAppNameFromPackage(packageName);
+                             savePermissionChangeRecommendation(recDao, appName, packageName, permission, isGranted);
                         }
                     }
                     currentStatuses.put(packageName, appCurrentStatus);
@@ -378,15 +396,15 @@ public class MonitoringService extends Service implements LocationListener {
     }
 
     private void savePermissionChangeRecommendation(RecommendationDao dao, String appName, String packageName, String permission, boolean granted) {
-        try {
-            String simplePermName = formatPermissionName(permission);
-            String title = "Permission " + (granted ? "Granted" : "Revoked");
-            String description = "'" + appName + "' " + (granted ? "granted" : "revoked") + ": " + simplePermName;
-            String type = granted ? RECOMMENDATION_TYPE_PERM_GRANTED : RECOMMENDATION_TYPE_PERM_REVOKED;
-            Recommendation rec = new Recommendation(title, description, type, packageName);
-            dao.insertRecommendation(rec);
-            Log.d(TAG, "BG Task: Saved perm change rec: " + description);
-        } catch (Exception e) { Log.e(TAG, "BG Task: Error saving perm change rec for " + packageName, e); }
+         try {
+             String simplePermName = formatPermissionName(permission);
+             String title = "Permission " + (granted ? "Granted" : "Revoked");
+             String description = "'" + appName + "' " + (granted ? "granted" : "revoked") + ": " + simplePermName;
+             String type = granted ? RECOMMENDATION_TYPE_PERM_GRANTED : RECOMMENDATION_TYPE_PERM_REVOKED;
+             Recommendation rec = new Recommendation(title, description, type, packageName);
+             dao.insertRecommendation(rec);
+             Log.d(TAG, "BG Task: Saved perm change rec: " + description);
+         } catch (Exception e) { Log.e(TAG, "BG Task: Error saving perm change rec for " + packageName, e); }
     }
 
 
@@ -431,22 +449,22 @@ public class MonitoringService extends Service implements LocationListener {
         String recentPackage = null;
         if (stats != null && !stats.isEmpty()) {
             try {
-                stats.sort(Comparator.comparingLong(UsageStats::getLastTimeUsed).reversed());
-                recentPackage = stats.get(0).getPackageName();
+                 stats.sort(Comparator.comparingLong(UsageStats::getLastTimeUsed).reversed());
+                 recentPackage = stats.get(0).getPackageName();
             } catch (Exception e) { Log.e(TAG, "Error sorting usage stats.", e); }
         }
         return recentPackage;
     }
 
     /** Gets the user-friendly application name for a given package name. */
-    private String getAppNameFromPackage(String packageName) {
-        if (packageName == null || packageName.isEmpty()) return "Unknown App";
-        PackageManager pm = getApplicationContext().getPackageManager();
-        try {
-            ApplicationInfo appInfo = pm.getApplicationInfo(packageName, 0);
-            return appInfo.loadLabel(pm).toString();
-        } catch (Exception e) { Log.w(TAG, "App name not found for package: " + packageName); return packageName; }
-    }
+     private String getAppNameFromPackage(String packageName) {
+         if (packageName == null || packageName.isEmpty()) return "Unknown App";
+         PackageManager pm = getApplicationContext().getPackageManager();
+         try {
+             ApplicationInfo appInfo = pm.getApplicationInfo(packageName, 0);
+             return appInfo.loadLabel(pm).toString();
+         } catch (Exception e) { Log.w(TAG, "App name not found for package: " + packageName); return packageName; }
+     }
 
     /** Creates the notification channel for the foreground service. */
     private void createNotificationChannel() {
@@ -471,14 +489,14 @@ public class MonitoringService extends Service implements LocationListener {
                 .setOngoing(true).setPriority(NotificationCompat.PRIORITY_LOW).build();
     }
 
-    /** Formats full permission names to shorter versions (e.g., CAMERA). */
-    private String formatPermissionName(String fullPermissionName) {
-        if (fullPermissionName == null) return "";
-        int lastDot = fullPermissionName.lastIndexOf('.');
-        if (lastDot >= 0 && lastDot < fullPermissionName.length() - 1) {
-            return fullPermissionName.substring(lastDot + 1);
-        }
-        return fullPermissionName;
-    }
+     /** Formats full permission names to shorter versions (e.g., CAMERA). */
+     private String formatPermissionName(String fullPermissionName) {
+         if (fullPermissionName == null) return "";
+         int lastDot = fullPermissionName.lastIndexOf('.');
+         if (lastDot >= 0 && lastDot < fullPermissionName.length() - 1) {
+             return fullPermissionName.substring(lastDot + 1);
+         }
+         return fullPermissionName;
+     }
 
 } // End of MonitoringService class
