@@ -2,6 +2,7 @@ package com.example.guardianai;
 
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
@@ -24,14 +25,13 @@ import androidx.annotation.Nullable;
 import androidx.cardview.widget.CardView;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
-import androidx.lifecycle.ViewModelProvider; // Import ViewModelProvider
+import androidx.lifecycle.ViewModelProvider;
 
-// --- ROOM DATABASE IMPORTS ---
 import com.example.guardianai.AppDatabase;
-import com.example.guardianai.AppPermissionsDao;
 import com.example.guardianai.AppPermissions;
+import com.example.guardianai.AppPermissionsDao;
 import com.example.guardianai.Recommendation;
-// --- END ROOM IMPORTS ---
+import com.example.guardianai.RecommendationDao;
 
 import com.google.android.material.progressindicator.CircularProgressIndicator;
 
@@ -62,6 +62,7 @@ public class DashboardFragment extends Fragment {
     // --- Logic Components ---
     private PermissionAnalyzer analyzer;
     private Map<PermissionAnalyzer.RiskLevel, List<String>> categorizedApps; // Holds results from last scan
+    private List<String> recommendationsDisplayList; // Holds the final strings shown in UI
     private RecommendationViewModel recommendationViewModel; // ViewModel instance
     private AppPermissionsDao appPermissionsDao; // DAO for AppPermissions table
 
@@ -84,7 +85,6 @@ public class DashboardFragment extends Fragment {
         initializeViews(view);
         analyzer = new PermissionAnalyzer();
 
-        // Initialize Database Access (AppPermissionsDao needed for saving the scan)
         Context appContext = getContext() != null ? getContext().getApplicationContext() : null;
         if (appContext != null) {
             AppDatabase db = AppDatabase.getDatabase(appContext);
@@ -94,7 +94,6 @@ public class DashboardFragment extends Fragment {
             Log.e(TAG, "Context was null during DAO initialization!");
         }
 
-        // Initialize Threading Components
         executorService = Executors.newSingleThreadExecutor();
         mainThreadHandler = new Handler(Looper.getMainLooper());
 
@@ -162,8 +161,8 @@ public class DashboardFragment extends Fragment {
         }
 
         Log.d(TAG, "Submitting permission scan task to executor...");
-        executorService.execute(() -> {
-            Log.d(TAG, "Background scan task started.");
+        executorService.execute(() -> { // Submit task to run on the background thread
+            Log.d("DashboardFragment BG", "Background scan task started.");
             Context context = getContext();
             if (context == null || appPermissionsDao == null) {
                 Log.e(TAG, "Context or AppPermissionsDao became null. Aborting.");
@@ -172,15 +171,15 @@ public class DashboardFragment extends Fragment {
             PackageManager pm = context.getPackageManager();
 
             // Perform the scan, categorization, and DB saving of app permissions
-            final ScanResult result = performScanAndCategorization(context, pm);
+            final ScanResult result = performScanAndCategorization(context, pm); // Make result final
 
             // --- Post Results back to Main Thread ---
-            mainThreadHandler.post(() -> {
+            mainThreadHandler.post(() -> { // Use the handler to run code on the UI thread
                 Log.d(TAG, "Received scan results on main thread.");
                 if (result != null && isAdded() && getActivity() != null) {
-                    // Update the categorizedApps map (used for card clicks)
+                    // Update the categorizedApps map (used for card clicks and LiveData processing)
                     categorizedApps = result.categorizedApps;
-                    // Update the BASE UI (score and risk cards) - recommendations updated by LiveData
+                    // Update the BASE UI (score and risk cards)
                     updateDashboardBaseUI(result.score, result.highRiskCount, result.mediumRiskCount, result.lowRiskCount, result.noRiskCount);
                     // Setup click listeners for cards
                     setupCardClickListeners();
@@ -204,14 +203,13 @@ public class DashboardFragment extends Fragment {
         int lowRiskCount = 0;
         int noRiskCount = 0;
         Map<PermissionAnalyzer.RiskLevel, List<String>> categorizedApps;
-        List<String> recommendations; // Temporary list for summary recommendations
     }
 
     // --- Core Scan Logic (Runs in Background) ---
     private ScanResult performScanAndCategorization(Context context, PackageManager pm) {
         ScanResult result = new ScanResult();
 
-        try {
+        try { // Wrap major logic
             result.categorizedApps = new HashMap<>();
             result.categorizedApps.put(PermissionAnalyzer.RiskLevel.HIGH, new ArrayList<>());
             result.categorizedApps.put(PermissionAnalyzer.RiskLevel.MEDIUM, new ArrayList<>());
@@ -224,8 +222,16 @@ public class DashboardFragment extends Fragment {
             for (PackageInfo pkgInfo : installedApps) {
                 try {
                     if (pkgInfo != null && pkgInfo.applicationInfo != null && (pkgInfo.applicationInfo.flags & ApplicationInfo.FLAG_SYSTEM) == 0) {
-                        totalUserAppsScanned++;
                         String packageName = pkgInfo.packageName;
+
+                        // --- CRITICAL FILTER: EXCLUDE SELF APP ---
+                        if (packageName.equals(context.getPackageName())) {
+                            Log.d(TAG, "Skipping self app for risk count: " + packageName);
+                            continue; // Skip the rest of the loop for GuardianAI
+                        }
+                        // ----------------------------------------
+
+                        totalUserAppsScanned++;
                         boolean appHasHighRisk = false;
                         boolean appHasMediumRisk = false;
                         boolean appHasLowRisk = false;
@@ -236,18 +242,27 @@ public class DashboardFragment extends Fragment {
                             permissionsString = String.join(",", permissions);
                             for (String permission : permissions) {
                                 PermissionAnalyzer.RiskLevel risk = analyzer.getPermissionRisk(permission);
-                                switch (risk) {
-                                    case HIGH:   appHasHighRisk = true; break;
-                                    case MEDIUM: appHasMediumRisk = true; break;
-                                    case LOW:    appHasLowRisk = true; break;
+
+                                // --- HYBRID SCORING LOGIC ---
+                                int grantStatus = pm.checkPermission(permission, packageName);
+                                boolean isGranted = (grantStatus == PackageManager.PERMISSION_GRANTED);
+
+                                // Only count HIGH/MEDIUM/LOW risk if they are currently GRANTED.
+                                if (isGranted) {
+                                    switch (risk) {
+                                        case HIGH:   appHasHighRisk = true; break;
+                                        case MEDIUM: appHasMediumRisk = true; break;
+                                        case LOW:    appHasLowRisk = true; break;
+                                    }
                                 }
                             }
-                            // Categorize based on highest risk found
+                            // Categorize based on highest GRANTED risk found
                             if (appHasHighRisk) result.categorizedApps.get(PermissionAnalyzer.RiskLevel.HIGH).add(packageName);
                             else if (appHasMediumRisk) result.categorizedApps.get(PermissionAnalyzer.RiskLevel.MEDIUM).add(packageName);
                             else if (appHasLowRisk) result.categorizedApps.get(PermissionAnalyzer.RiskLevel.LOW).add(packageName);
                             else result.categorizedApps.get(PermissionAnalyzer.RiskLevel.NO_RISK).add(packageName);
                         } else {
+                            // No permissions requested at all
                             result.categorizedApps.get(PermissionAnalyzer.RiskLevel.NO_RISK).add(packageName);
                         }
                         // Save/Update App Permissions record in DB
@@ -264,12 +279,6 @@ public class DashboardFragment extends Fragment {
             result.mediumRiskCount = result.categorizedApps.get(PermissionAnalyzer.RiskLevel.MEDIUM).size();
             result.lowRiskCount = result.categorizedApps.get(PermissionAnalyzer.RiskLevel.LOW).size();
             result.noRiskCount = result.categorizedApps.get(PermissionAnalyzer.RiskLevel.NO_RISK).size();
-
-            // --- Generate ONLY Summary Recommendations Here ---
-            result.recommendations = new ArrayList<>();
-            if (result.highRiskCount > 0) result.recommendations.add("Review " + result.highRiskCount + " high-risk apps");
-            if (result.mediumRiskCount > 0) result.recommendations.add("Check permissions for " + result.mediumRiskCount + " medium-risk apps");
-            // --- End Summary Recommendations ---
 
             // Calculate Score
             result.score = calculateScore(result.highRiskCount, result.mediumRiskCount, totalUserAppsScanned);
@@ -299,18 +308,24 @@ public class DashboardFragment extends Fragment {
     private void onRecommendationsLiveDataUpdate(List<Recommendation> dbRecommendations) {
         Log.d(TAG, "LiveData observer received update with " + (dbRecommendations != null ? dbRecommendations.size() : "null") + " items.");
 
-        // Check if categorizedApps is ready (it's updated by startPermissionScan)
+        // --- FIX: Ensure Categorized Map is Ready Before Processing ---
         if (categorizedApps == null) {
-            Log.w(TAG, "Categorized map is null. Waiting for full scan to complete before updating recommendations.");
+            Log.w(TAG, "Categorized map is null. LiveData update skipped/paused until base scan is complete.");
+            // The next time the background scan finishes, it will update the base UI,
+            // which should trigger a successful LiveData update soon after.
             return;
         }
+        // --- END FIX ---
+
 
         // 1. Format the database recommendations into display strings
         List<String> displayStrings = new ArrayList<>();
 
-        // 2. Add Summary Recommendations (Generated from the latest scan counts)
+        // 2. Add Summary Recommendations (The crucial part that relies on the main scan)
         int highCount = (categorizedApps.get(PermissionAnalyzer.RiskLevel.HIGH) != null) ? categorizedApps.get(PermissionAnalyzer.RiskLevel.HIGH).size() : 0;
         int mediumCount = (categorizedApps.get(PermissionAnalyzer.RiskLevel.MEDIUM) != null) ? categorizedApps.get(PermissionAnalyzer.RiskLevel.MEDIUM).size() : 0;
+
+        // Add summary recs to the front of the list
         if (highCount > 0) displayStrings.add("Review " + highCount + " high-risk apps");
         if (mediumCount > 0) displayStrings.add("Check permissions for " + mediumCount + " medium-risk apps");
 
@@ -321,7 +336,8 @@ public class DashboardFragment extends Fragment {
                 String displayText = rec.description; // Base text
 
                 // Append package name in parentheses for click handling
-                if (rec.associatedPackageName != null && !rec.associatedPackageName.isEmpty()) {
+                if (rec.associatedPackageName != null && !rec.associatedPackageName.isEmpty())
+                {
                     // This is done for UNUSED_APP, CLIPBOARD_ACCESS, etc.
                     displayText += " (" + rec.associatedPackageName + ")";
                 }
@@ -389,11 +405,11 @@ public class DashboardFragment extends Fragment {
                     // Set appropriate icon based on recommendation type (deduced from text)
                     if (recIcon != null) {
                         String lowerRecText = recText.toLowerCase();
-                        if (lowerRecText.contains("high-risk")) {
+                        if (lowerRecText.contains("high-risk") || lowerRecText.contains("camera")) {
                             recIcon.setImageResource(R.drawable.ic_risk_high);
                             recIcon.setBackgroundResource(R.drawable.risk_card_high_bg);
                             recIcon.setColorFilter(ContextCompat.getColor(context, R.color.high_risk_color));
-                        } else if (lowerRecText.contains("medium-risk")) {
+                        } else if (lowerRecText.contains("medium-risk") || lowerRecText.contains("clipboard") || lowerRecText.contains("location") || lowerRecText.contains("mic")) {
                             recIcon.setImageResource(R.drawable.ic_risk_medium);
                             recIcon.setBackgroundResource(R.drawable.risk_card_medium_bg);
                             recIcon.setColorFilter(ContextCompat.getColor(context, R.color.medium_risk_color));
@@ -401,18 +417,6 @@ public class DashboardFragment extends Fragment {
                             recIcon.setImageResource(R.drawable.ic_history);
                             recIcon.setBackgroundResource(R.drawable.notice_background);
                             recIcon.setColorFilter(ContextCompat.getColor(context, R.color.default_recommendation_color));
-                        } else if (lowerRecText.contains("clipboard")) {
-                            recIcon.setImageResource(R.drawable.ic_clipboard);
-                            recIcon.setBackgroundResource(R.drawable.risk_card_medium_bg);
-                            recIcon.setColorFilter(ContextCompat.getColor(context, R.color.medium_risk_color));
-                        } else if (lowerRecText.contains("camera")) {
-                            recIcon.setImageResource(R.drawable.ic_camera);
-                            recIcon.setBackgroundResource(R.drawable.risk_card_high_bg);
-                            recIcon.setColorFilter(ContextCompat.getColor(context, R.color.high_risk_color));
-                        } else if (lowerRecText.contains("location") || lowerRecText.contains("mic")) { // Added mic check for robustness
-                            recIcon.setImageResource(R.drawable.ic_location); // Assuming location icon is sufficient for location/mic
-                            recIcon.setBackgroundResource(R.drawable.risk_card_medium_bg);
-                            recIcon.setColorFilter(ContextCompat.getColor(context, R.color.medium_risk_color));
                         } else {
                             // Default icon for unclassified or permission grant/revoke events
                             recIcon.setImageResource(R.drawable.ic_lightbulb);
@@ -430,7 +434,6 @@ public class DashboardFragment extends Fragment {
                         if (recText.contains("high-risk")) navigateToAppList(PermissionAnalyzer.RiskLevel.HIGH);
                         else if (recText.contains("medium-risk")) navigateToAppList(PermissionAnalyzer.RiskLevel.MEDIUM);
                         else if (recText.contains("unused") || recText.contains("clipboard") || recText.contains("camera") || recText.contains("location") || recText.contains("permission")) {
-                            // Handle specific app recommendations or permission changes by opening settings
                             if (packageName != null) openAppSettings(packageName);
                             else Toast.makeText(getActivity(), "Could not identify app.", Toast.LENGTH_SHORT).show();
                         } else Toast.makeText(getActivity(), "More info for: " + recText, Toast.LENGTH_SHORT).show();
@@ -441,6 +444,7 @@ public class DashboardFragment extends Fragment {
         Log.d(TAG, "updateRecommendationsUI finished.");
     }
 
+    // --- Other Helper Methods ---
 
     // Helper Method to Set Up Click Listeners for Risk Cards
     private void setupCardClickListeners() {
