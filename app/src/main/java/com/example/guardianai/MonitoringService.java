@@ -12,9 +12,9 @@ import android.app.usage.UsageStatsManager;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
-import android.content.SharedPreferences; // Needed for perm status saving
+import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
-import android.content.pm.PackageInfo; // Needed for perm status checking
+import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.hardware.camera2.CameraManager;
 import android.location.Location;
@@ -24,7 +24,7 @@ import android.media.AudioFormat;
 import android.media.AudioRecord;
 import android.media.MediaRecorder;
 import android.os.Build;
-import android.os.Bundle; // Import Bundle
+import android.os.Bundle; // For onStatusChanged fix
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
@@ -86,11 +86,9 @@ public class MonitoringService extends Service implements LocationListener {
     private LocationManager locationManager;
     private Timer micCheckTimer;
     private boolean isMicInUse = false;
-    private static final long MIC_CHECK_INTERVAL_MS = 5000;
-
-    // --- Permission Status Monitoring ---
+    private static final long MIC_CHECK_INTERVAL_MS = 30000; // OPTIMIZATION: Increased to 30 seconds
     private Timer permissionCheckTimer;
-    private static final long PERMISSION_CHECK_INTERVAL_MS = 15 * 60 * 1000;
+    private static final long PERMISSION_CHECK_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
     private SharedPreferences permissionStatusPrefs;
     private Gson gson = new Gson();
     private static final String PERM_STATUS_PREFS_NAME = "GuardianAI_PermStatus";
@@ -121,9 +119,10 @@ public class MonitoringService extends Service implements LocationListener {
         initializeClipboardMonitoring();
         initializeCameraMonitoring();
         initializeLocationMonitoring();
-        startMicMonitoring();
-        initializePermissionStatusMonitoring();
-    }
+        startMicMonitoring(); // Start timer for mic checks
+        initializePermissionStatusMonitoring(); // Init prefs and start timer
+
+    } // End onCreate
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -227,8 +226,8 @@ public class MonitoringService extends Service implements LocationListener {
     /** Saves a recommendation to the database on a background thread. */
     private void saveRecommendationToDb(String packageName, String eventType) {
         final String finalPackageName = packageName;
-        final String finalEventType = eventType; // e.g., CAMERA
-        final String recommendationType = eventType + "_ACCESS"; // e.g., CAMERA_ACCESS
+        final String finalEventType = eventType;
+        final String recommendationType = eventType + "_ACCESS";
 
         databaseExecutor.execute(() -> {
             Log.d(TAG, "BG Task: Saving " + finalEventType + " recommendation for " + finalPackageName);
@@ -261,7 +260,7 @@ public class MonitoringService extends Service implements LocationListener {
     // --- FIX FOR ANDROID 7.0 CRASH ---
     @Override
     public void onStatusChanged(String provider, int status, Bundle extras) {
-        // This is required for older Android versions (API 24/25) even though it's deprecated.
+        // REQUIRED FOR OLDER ANDROID VERSIONS (API 24/25)
         Log.d(TAG, "Location status changed for provider " + provider + ": status=" + status);
     }
     // --- END FIX ---
@@ -272,7 +271,7 @@ public class MonitoringService extends Service implements LocationListener {
 
     // --- Microphone Monitoring Methods ---
     private void startMicMonitoring() {
-        Log.d(TAG, "Starting mic monitoring timer.");
+        Log.d(TAG, "Starting mic monitoring timer (Interval: " + MIC_CHECK_INTERVAL_MS / 1000 + "s).");
         if (micCheckTimer != null) micCheckTimer.cancel();
         micCheckTimer = new Timer();
         micCheckTimer.scheduleAtFixedRate(new TimerTask() {
@@ -321,7 +320,7 @@ public class MonitoringService extends Service implements LocationListener {
 
     // --- Permission Status Monitoring Methods ---
     private void startPermissionStatusMonitoring() {
-        Log.d(TAG, "Starting permission status monitoring timer.");
+        Log.d(TAG, "Starting permission status monitoring timer (Interval: " + PERMISSION_CHECK_INTERVAL_MS / 60000 + "m).");
         if (permissionCheckTimer != null) permissionCheckTimer.cancel();
         permissionCheckTimer = new Timer();
         permissionCheckTimer.scheduleAtFixedRate(new TimerTask() {
@@ -345,7 +344,6 @@ public class MonitoringService extends Service implements LocationListener {
         PackageManager pm = context.getPackageManager();
         RecommendationDao recDao = AppDatabase.getDatabase(context).recommendationDao();
         if (recDao == null) { Log.e(TAG, "BG Task: DAO is null, cannot check perm status."); return; }
-
 
         Map<String, Map<String, Boolean>> lastStatuses = loadPermissionStatuses();
         Map<String, Map<String, Boolean>> currentStatuses = new HashMap<>();
@@ -390,6 +388,7 @@ public class MonitoringService extends Service implements LocationListener {
             Log.d(TAG, "BG Task: Saved perm change rec: " + description);
         } catch (Exception e) { Log.e(TAG, "BG Task: Error saving perm change rec for " + packageName, e); }
     }
+
 
     // --- SharedPreferences Helpers for Permission Status ---
     private Map<String, Map<String, Boolean>> loadPermissionStatuses() {
