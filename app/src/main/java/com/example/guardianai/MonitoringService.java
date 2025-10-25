@@ -20,10 +20,11 @@ import android.hardware.camera2.CameraManager;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
-import android.media.AudioFormat;    // Needed for mic check
-import android.media.AudioRecord;    // Needed for mic check
-import android.media.MediaRecorder; // Needed for mic check
+import android.media.AudioFormat;
+import android.media.AudioRecord;
+import android.media.MediaRecorder;
 import android.os.Build;
+import android.os.Bundle; // Import Bundle
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
@@ -36,9 +37,9 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.app.NotificationCompat;
 
 // --- Room Database Imports ---
-import com.example.guardianai.AppDatabase; // Use correct package
-import com.example.guardianai.Recommendation; // Use correct package
-import com.example.guardianai.RecommendationDao; // Use correct package
+import com.example.guardianai.AppDatabase;
+import com.example.guardianai.Recommendation;
+import com.example.guardianai.RecommendationDao;
 // --- End Room Imports ---
 
 // --- GSON Imports ---
@@ -100,6 +101,7 @@ public class MonitoringService extends Service implements LocationListener {
             Manifest.permission.READ_SMS
     };
 
+
     // --- Lifecycle Methods ---
 
     @Override
@@ -119,10 +121,9 @@ public class MonitoringService extends Service implements LocationListener {
         initializeClipboardMonitoring();
         initializeCameraMonitoring();
         initializeLocationMonitoring();
-        startMicMonitoring(); // Start timer for mic checks
-        initializePermissionStatusMonitoring(); // Init prefs and start timer
-
-    } // End onCreate
+        startMicMonitoring();
+        initializePermissionStatusMonitoring();
+    }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -135,7 +136,7 @@ public class MonitoringService extends Service implements LocationListener {
         return START_STICKY;
     }
 
-    @Nullable @Override public IBinder onBind(Intent intent) { return null; } // Not binding
+    @Nullable @Override public IBinder onBind(Intent intent) { return null; }
 
     @Override
     public void onDestroy() {
@@ -148,9 +149,10 @@ public class MonitoringService extends Service implements LocationListener {
         stopMicMonitoring();
         stopPermissionStatusMonitoring();
         // --- Shutdown Executor ---
-        if (databaseExecutor != null && !databaseExecutor.isShutdown()) { databaseExecutor.shutdown(); }
+        if (databaseExecutor != null && !databaseExecutor.isShutdown()) { databaseExecutor.shutdown(); Log.d(TAG, "Database executor shut down requested."); }
         Log.d(TAG,"MonitoringService destroyed.");
     }
+
 
     // --- Initialization Helpers ---
     private void initializeClipboardMonitoring() {
@@ -255,6 +257,15 @@ public class MonitoringService extends Service implements LocationListener {
 
     // --- LocationListener Implementation ---
     @Override public void onLocationChanged(@NonNull Location location) { Log.w(TAG, "Location changed event."); handleSensorUsage("LOCATION"); }
+
+    // --- FIX FOR ANDROID 7.0 CRASH ---
+    @Override
+    public void onStatusChanged(String provider, int status, Bundle extras) {
+        // This is required for older Android versions (API 24/25) even though it's deprecated.
+        Log.d(TAG, "Location status changed for provider " + provider + ": status=" + status);
+    }
+    // --- END FIX ---
+
     @Override public void onProviderEnabled(@NonNull String provider) { Log.d(TAG, "Location provider enabled: " + provider); }
     @Override public void onProviderDisabled(@NonNull String provider) { Log.d(TAG, "Location provider disabled: " + provider); }
     // --- End LocationListener ---
@@ -280,7 +291,7 @@ public class MonitoringService extends Service implements LocationListener {
             if (isMicInUse) isMicInUse = false;
             return; // Cannot check without permission
         }
-        boolean micBusy = isMicrophoneInUse(); // Check current status
+        boolean micBusy = isMicrophoneInUse();
         if (micBusy && !isMicInUse) {
             Log.w(TAG, "Microphone appears IN USE!"); isMicInUse = true; handleSensorUsage("MICROPHONE");
         } else if (!micBusy && isMicInUse) {
@@ -290,19 +301,15 @@ public class MonitoringService extends Service implements LocationListener {
 
     // Includes the permission check fix
     private boolean isMicrophoneInUse() {
-        // --- ADDED PERMISSION CHECK HERE ---
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            // Log.w(TAG, "Mic check: RECORD_AUDIO permission not granted. Cannot determine status."); // Can be noisy
-            return false; // Return false as we cannot confirm it's in use
+            return false;
         }
-        // --- END PERMISSION CHECK ---
-
         AudioRecord audioRecord = null; boolean isInUse = false;
         try {
             int sr=8000; int ch=AudioFormat.CHANNEL_IN_MONO; int fmt=AudioFormat.ENCODING_PCM_16BIT;
-            int bufSize = AudioRecord.getMinBufferSize(sr, ch, fmt);
-            if (bufSize <= 0) { Log.e(TAG, "Mic check: Invalid buffer size: " + bufSize); return false; }
-            audioRecord = new AudioRecord(MediaRecorder.AudioSource.DEFAULT, sr, ch, fmt, bufSize);
+            int bufferSize = AudioRecord.getMinBufferSize(sr, ch, fmt);
+            if (bufferSize <= 0) { Log.e(TAG, "Mic check: Invalid buffer size: " + bufferSize); return false; }
+            audioRecord = new AudioRecord(MediaRecorder.AudioSource.DEFAULT, sr, ch, fmt, bufferSize);
             audioRecord.startRecording();
             if (audioRecord.getRecordingState() == AudioRecord.RECORDSTATE_RECORDING) { isInUse = false; audioRecord.stop(); }
             else { Log.w(TAG, "Mic check: State not RECORDING."); isInUse = true; }
@@ -331,11 +338,11 @@ public class MonitoringService extends Service implements LocationListener {
         if (permissionCheckTimer != null) { permissionCheckTimer.cancel(); permissionCheckTimer = null; }
     }
 
+    /** Checks grant status of key permissions for user apps, compares against last known status. Runs in background. */
     private void checkPermissionStatusChanges() {
         Log.d(TAG, "BG Task: Checking permission status changes...");
         Context context = getApplicationContext();
         PackageManager pm = context.getPackageManager();
-        // Get DAO within background task for safety
         RecommendationDao recDao = AppDatabase.getDatabase(context).recommendationDao();
         if (recDao == null) { Log.e(TAG, "BG Task: DAO is null, cannot check perm status."); return; }
 
@@ -368,7 +375,7 @@ public class MonitoringService extends Service implements LocationListener {
                 }
             } catch (Exception e) { Log.e(TAG, "BG Task: Error checking perm status for pkg: " + (pkgInfo != null ? pkgInfo.packageName : "null"), e); }
         }
-        savePermissionStatuses(currentStatuses); // Save current state
+        savePermissionStatuses(currentStatuses);
         Log.d(TAG, "BG Task: Finished checking permission statuses.");
     }
 
@@ -412,7 +419,6 @@ public class MonitoringService extends Service implements LocationListener {
         if (appOps == null) return false;
         int mode = appOps.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), context.getPackageName());
         boolean hasPermission = (mode == AppOpsManager.MODE_ALLOWED);
-        // if (!hasPermission) { Log.w(TAG, "Usage Stats permission NOT granted."); }
         return hasPermission;
     }
 
@@ -461,7 +467,7 @@ public class MonitoringService extends Service implements LocationListener {
         return new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setContentTitle("GuardianAI Active")
                 .setContentText("Monitoring device activity.")
-                .setSmallIcon(R.drawable.ic_security) // Ensure ic_security exists
+                .setSmallIcon(R.drawable.ic_security)
                 .setContentIntent(pi)
                 .setOngoing(true).setPriority(NotificationCompat.PRIORITY_LOW).build();
     }
