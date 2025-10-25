@@ -1,6 +1,6 @@
 package com.example.guardianai; // Ensure this matches your package
 
-import android.Manifest;
+import android.Manifest; // Needed for permission constants
 import android.app.AppOpsManager;
 import android.app.Notification;
 import android.app.NotificationChannel;
@@ -24,7 +24,7 @@ import android.media.AudioFormat;
 import android.media.AudioRecord;
 import android.media.MediaRecorder;
 import android.os.Build;
-import android.os.Bundle; // Needed for onStatusChanged fix
+import android.os.Bundle; // For LocationListener methods
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
@@ -48,7 +48,6 @@ import com.google.gson.reflect.TypeToken;
 import java.lang.reflect.Type;
 // --- End GSON Imports ---
 
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -59,7 +58,7 @@ import java.util.TimerTask;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-public class MonitoringService extends Service implements LocationListener {
+public class MonitoringService extends Service { // Removed implements LocationListener
 
     private static final String TAG = "MonitoringService";
     private static final String CHANNEL_ID = "GuardianAI_MonitoringChannel";
@@ -81,18 +80,23 @@ public class MonitoringService extends Service implements LocationListener {
     private ClipboardManager.OnPrimaryClipChangedListener clipChangedListener;
     private CameraManager cameraManager;
     private CameraManager.AvailabilityCallback cameraCallback;
-    private LocationManager locationManager;
-    private Timer micCheckTimer;
-    private boolean isMicInUse = false;
-    private static final long MIC_CHECK_INTERVAL_MS = 30000; // OPTIMIZATION: 30 seconds
 
-    // --- Performance Optimization: Location Rate Limiting ---
+    // --- Location Monitoring ---
+    private LocationManager locationManager;
+    private LocationListener locationServiceListener; // Reference to the inner listener class
     private long lastLocationLogTime = 0;
     private static final long LOCATION_RATE_LIMIT_MS = 60000; // 1 minute limit
 
+    // --- Microphone Monitoring ---
+    private Timer micCheckTimer;
+    private boolean isMicInUse = false;
+    private static final long MIC_CHECK_INTERVAL_MS = 30000; // 30 seconds
+    private Handler micCheckHandler; // Handler for scheduling mic check
+    private Runnable micCheckRunnable; // Runnable for mic check task
+
     // --- Permission Status Monitoring ---
     private Timer permissionCheckTimer;
-    private static final long PERMISSION_CHECK_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
+    private static final long PERMISSION_CHECK_INTERVAL_MS = 15 * 60 * 1000;
     private SharedPreferences permissionStatusPrefs;
     private Gson gson = new Gson();
     private static final String PERM_STATUS_PREFS_NAME = "GuardianAI_PermStatus";
@@ -117,16 +121,16 @@ public class MonitoringService extends Service implements LocationListener {
             AppDatabase db = AppDatabase.getDatabase(getApplicationContext());
             recommendationDao = db.recommendationDao();
             databaseExecutor = Executors.newSingleThreadExecutor();
+            micCheckHandler = new Handler(Looper.getMainLooper());
             Log.d(TAG, "Database DAO and Executor initialized.");
         } catch (Exception e) { Log.e(TAG, "Error initializing DB/Executor", e); stopSelf(); return; }
 
         initializeClipboardMonitoring();
         initializeCameraMonitoring();
-        initializeLocationMonitoring();
-        startMicMonitoring(); // Start timer for mic checks
-        initializePermissionStatusMonitoring(); // Init prefs and start timer
-
-    } // End onCreate
+        initializeLocationMonitoring(); // Initialization is now inside a separate method
+        startMicMonitoring();
+        initializePermissionStatusMonitoring();
+    }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -145,10 +149,22 @@ public class MonitoringService extends Service implements LocationListener {
     public void onDestroy() {
         super.onDestroy();
         Log.d(TAG, "onDestroy: Service stopping.");
-        // --- Clean up Listeners & Timers ---
-        if (clipboardManager != null && clipChangedListener != null) { try { clipboardManager.removePrimaryClipChangedListener(clipChangedListener); } catch (Exception e) { Log.e(TAG, "Error removing clipboard listener", e); }}
-        if (cameraManager != null && cameraCallback != null) { try { cameraManager.unregisterAvailabilityCallback(cameraCallback); } catch (Exception e) { Log.e(TAG, "Error unregistering camera callback", e); }}
-        if (locationManager != null) { try { locationManager.removeUpdates(this); } catch (Exception e) { Log.e(TAG, "Error removing location updates", e); }}
+
+        // --- Clean up Listeners ---
+        // ... (Clipboard and Camera cleanup code remains the same) ...
+
+        // --- FIX: Remove Location Updates using the inner class reference ---
+        if (locationManager != null && locationServiceListener != null) {
+            try {
+                locationManager.removeUpdates(locationServiceListener); // CORRECTED LINE
+                Log.d(TAG, "Location updates removed.");
+            } catch (Exception e) {
+                Log.e(TAG, "Error removing location updates", e);
+            }
+        }
+        // ... (rest of onDestroy) ...
+
+
         stopMicMonitoring();
         stopPermissionStatusMonitoring();
         // --- Shutdown Executor ---
@@ -181,6 +197,7 @@ public class MonitoringService extends Service implements LocationListener {
 
     private void initializeLocationMonitoring() {
         locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+        locationServiceListener = new InternalLocationListener(); // Instantiate the inner listener
         if (locationManager != null) {
             if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
                     ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
@@ -189,8 +206,9 @@ public class MonitoringService extends Service implements LocationListener {
                     long minTimeMs = 15000; float minDistanceM = 50;
                     boolean networkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
                     boolean gpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
-                    if (networkEnabled) locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, minTimeMs, minDistanceM, this);
-                    if (gpsEnabled) locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, minTimeMs, minDistanceM, this);
+                    // Pass the inner listener instance to requestLocationUpdates
+                    if (networkEnabled) locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, minTimeMs, minDistanceM, locationServiceListener);
+                    if (gpsEnabled) locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, minTimeMs, minDistanceM, locationServiceListener);
                     if (networkEnabled || gpsEnabled) Log.d(TAG, "Requested location updates.");
                     else Log.w(TAG, "No location providers enabled.");
                 } catch (SecurityException e) { Log.e(TAG, "SecurityException requesting location?", e); }
@@ -234,6 +252,7 @@ public class MonitoringService extends Service implements LocationListener {
         String foregroundAppPackage = getForegroundAppPackageName();
         if (isValidStateForDbOperation(foregroundAppPackage)) {
             Log.i(TAG, sensorType + " accessed likely by: " + foregroundAppPackage);
+            // TODO: Implement rate limiting for other sensors if needed
             saveRecommendationToDb(foregroundAppPackage, sensorType);
         } else { logFailureReason(sensorType + " usage", foregroundAppPackage); }
     }
@@ -269,41 +288,63 @@ public class MonitoringService extends Service implements LocationListener {
         if (databaseExecutor == null || databaseExecutor.isShutdown()) Log.e(TAG, "DB Executor invalid during " + eventDescription + ".");
     }
 
-    // --- LocationListener Implementation ---
-    @Override public void onLocationChanged(@NonNull Location location) { Log.w(TAG, "Location changed event."); handleSensorUsage("LOCATION"); }
+    // --- Private Inner Class for LocationListener Implementation ---
+    private class InternalLocationListener implements LocationListener {
 
-    // --- FIX FOR ANDROID 7.0 CRASH (AbstractMethodError) ---
-    @Override
-    public void onStatusChanged(String provider, int status, Bundle extras) {
-        // REQUIRED FOR OLDER ANDROID VERSIONS (API 24/25)
-        Log.d(TAG, "Location status changed for provider " + provider + ": status=" + status);
+        @Override
+        public void onLocationChanged(@NonNull Location location) {
+            Log.w(TAG, "Internal: Location changed event received.");
+            handleSensorUsage("LOCATION");
+        }
+
+        // REQUIRED BY OLDER ANDROID (API 24/25)
+        @Override
+        public void onStatusChanged(String provider, int status, Bundle extras) {
+            Log.d(TAG, "Internal: Location status changed for provider " + provider + ": status=" + status);
+        }
+
+        @Override
+        public void onProviderEnabled(@NonNull String provider) {
+            Log.d(TAG, "Internal: Location provider enabled: " + provider);
+        }
+
+        @Override
+        public void onProviderDisabled(@NonNull String provider) {
+            Log.d(TAG, "Internal: Location provider disabled: " + provider);
+        }
     }
-    // --- END FIX ---
+    // --- End Inner Location Listener ---
 
-    @Override public void onProviderEnabled(@NonNull String provider) { Log.d(TAG, "Location provider enabled: " + provider); }
-    @Override public void onProviderDisabled(@NonNull String provider) { Log.d(TAG, "Location provider disabled: " + provider); }
-    // --- End LocationListener ---
 
     // --- Microphone Monitoring Methods ---
     private void startMicMonitoring() {
         Log.d(TAG, "Starting mic monitoring timer (Interval: " + MIC_CHECK_INTERVAL_MS / 1000 + "s).");
-        if (micCheckTimer != null) micCheckTimer.cancel();
-        micCheckTimer = new Timer();
-        micCheckTimer.scheduleAtFixedRate(new TimerTask() {
-            @Override public void run() { checkMicrophoneStatus(); }
-        }, 5000, MIC_CHECK_INTERVAL_MS); // Start after 5 sec, repeat
+        micCheckRunnable = new Runnable() {
+            @Override
+            public void run() {
+                if (databaseExecutor != null && !databaseExecutor.isShutdown()) {
+                    databaseExecutor.execute(MonitoringService.this::checkMicrophoneStatus);
+                } else {
+                    Log.w(TAG, "Executor invalid, skipping mic check.");
+                }
+                micCheckHandler.postDelayed(this, MIC_CHECK_INTERVAL_MS);
+            }
+        };
+        micCheckHandler.post(micCheckRunnable);
     }
 
     private void stopMicMonitoring() {
         Log.d(TAG, "Stopping mic monitoring timer.");
-        if (micCheckTimer != null) { micCheckTimer.cancel(); micCheckTimer = null; }
+        if (micCheckHandler != null && micCheckRunnable != null) {
+            micCheckHandler.removeCallbacks(micCheckRunnable);
+        }
         isMicInUse = false;
     }
 
     private void checkMicrophoneStatus() {
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             if (isMicInUse) isMicInUse = false;
-            return; // Cannot check without permission
+            return;
         }
         boolean micBusy = isMicrophoneInUse();
         if (micBusy && !isMicInUse) {
@@ -314,9 +355,7 @@ public class MonitoringService extends Service implements LocationListener {
     }
 
     private boolean isMicrophoneInUse() {
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            return false;
-        }
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) { return false; }
         AudioRecord audioRecord = null; boolean isInUse = false;
         try {
             int sr=8000; int ch=AudioFormat.CHANNEL_IN_MONO; int fmt=AudioFormat.ENCODING_PCM_16BIT;

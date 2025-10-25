@@ -7,204 +7,221 @@
     android:background="#FFFFFF"
     android:fillViewport="true">
 
-    <androidx.constraintlayout.widget.ConstraintLayout
+    <FrameLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:padding="16dp"
-        tools:context=".DashboardFragment">
+        android:layout_height="match_parent">
 
-        <ImageView
-            android:id="@+id/logo_icon"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
-            android:src="@drawable/ic_logo_final"
-            app:tint="#60B6D7"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintBottom_toBottomOf="@id/logo_text" />
-
-        <TextView
-            android:id="@+id/logo_text"
+        <ProgressBar
+            android:id="@+id/loading_spinner"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="GuardianAI"
-            android:textColor="#2C3E50"
-            android:textSize="20sp"
-            android:textStyle="bold"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintTop_toTopOf="parent" />
+            android:layout_gravity="center"
+            android:indeterminate="true"
+            android:visibility="visible"
+            style="?android:attr/progressBarStyleLarge" />
 
-        <ImageView
-            android:id="@+id/settings_icon"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
-            android:src="@drawable/ic_settings"
-            app:tint="#7F8C8D"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintBottom_toBottomOf="@id/logo_text" />
-
-        <com.google.android.material.progressindicator.CircularProgressIndicator
-            android:id="@+id/progress_bar"
-            android:layout_width="wrap_content"
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:id="@+id/main_content_group"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:progress="80"
-            app:indicatorSize="200dp"
-            app:trackThickness="20dp"
-            app:trackCornerRadius="10dp"
-            app:indicatorColor="#60B6D7"
-            app:trackColor="#E3F2FD"
-            android:layout_marginTop="32dp"
-            app:layout_constraintTop_toBottomOf="@id/logo_text"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent" />
+            android:padding="16dp"
+            android:visibility="gone"
+            tools:context=".DashboardFragment">
 
-        <TextView
-            android:id="@+id/progress_text"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="80"
-            android:textColor="#2C3E50"
-            android:textSize="64sp"
-            android:textStyle="bold"
-            app:layout_constraintTop_toTopOf="@id/progress_bar"
-            app:layout_constraintBottom_toBottomOf="@id/progress_bar"
-            app:layout_constraintStart_toStartOf="@id/progress_bar"
-            app:layout_constraintEnd_toEndOf="@id/progress_bar" />
+            <ImageView
+                android:id="@+id/logo_icon"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:src="@drawable/ic_logo_final"
+                app:tint="#60B6D7"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintBottom_toBottomOf="@id/logo_text" />
 
-        <GridLayout
-            android:id="@+id/risk_grid"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:columnCount="2"
-            android:useDefaultMargins="true"
-            android:layout_marginTop="32dp"
-            app:layout_constraintTop_toBottomOf="@id/progress_bar"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent">
+            <TextView
+                android:id="@+id/logo_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="GuardianAI"
+                android:textColor="#2C3E50"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintTop_toTopOf="parent" />
 
-            <androidx.cardview.widget.CardView
-                android:id="@+id/card_high_risk"
+            <ImageView
+                android:id="@+id/settings_icon"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:src="@drawable/ic_settings"
+                app:tint="#7F8C8D"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintBottom_toBottomOf="@id/logo_text" />
+
+            <com.google.android.material.progressindicator.CircularProgressIndicator
+                android:id="@+id/progress_bar"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:progress="80"
+                app:indicatorSize="200dp"
+                app:trackThickness="20dp"
+                app:trackCornerRadius="10dp"
+                app:indicatorColor="#60B6D7"
+                app:trackColor="#E3F2FD"
+                android:layout_marginTop="32dp"
+                app:layout_constraintTop_toBottomOf="@id/logo_text"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent" />
+
+            <TextView
+                android:id="@+id/progress_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="80"
+                android:textColor="#2C3E50"
+                android:textSize="64sp"
+                android:textStyle="bold"
+                app:layout_constraintTop_toTopOf="@id/progress_bar"
+                app:layout_constraintBottom_toBottomOf="@id/progress_bar"
+                app:layout_constraintStart_toStartOf="@id/progress_bar"
+                app:layout_constraintEnd_toEndOf="@id/progress_bar" />
+
+            <GridLayout
+                android:id="@+id/risk_grid"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_columnWeight="1"
-                app:cardCornerRadius="16dp"
-                app:cardBackgroundColor="#FFF6F6"
-                app:cardElevation="0dp"
-                app:cardUseCompatPadding="true">
-                <LinearLayout android:orientation="horizontal" android:padding="16dp" android:gravity="center_vertical" android:layout_width="match_parent" android:layout_height="wrap_content">
-                    <ImageView android:src="@drawable/ic_risk_high" app:tint="#D9534F" android:layout_width="24dp" android:layout_height="24dp" android:layout_marginEnd="8dp"/>
-                    <TextView
-                        android:id="@+id/text_high_risk"
-                        android:text="High Risk (9)"
-                        android:textColor="#D9534F"
-                        android:textStyle="bold"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"/>
-                </LinearLayout>
-            </androidx.cardview.widget.CardView>
+                android:columnCount="2"
+                android:useDefaultMargins="true"
+                android:layout_marginTop="32dp"
+                app:layout_constraintTop_toBottomOf="@id/progress_bar"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent">
 
-            <androidx.cardview.widget.CardView
-                android:id="@+id/card_medium_risk"
+                <androidx.cardview.widget.CardView
+                    android:id="@+id/card_high_risk"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_columnWeight="1"
+                    app:cardCornerRadius="16dp"
+                    app:cardBackgroundColor="#FFF6F6"
+                    app:cardElevation="0dp"
+                    app:cardUseCompatPadding="true">
+                    <LinearLayout android:orientation="horizontal" android:padding="16dp" android:gravity="center_vertical" android:layout_width="match_parent" android:layout_height="wrap_content">
+                        <ImageView android:src="@drawable/ic_risk_high" app:tint="#D9534F" android:layout_width="24dp" android:layout_height="24dp" android:layout_marginEnd="8dp"/>
+                        <TextView
+                            android:id="@+id/text_high_risk"
+                            android:text="High Risk (9)"
+                            android:textColor="#D9534F"
+                            android:textStyle="bold"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"/>
+                    </LinearLayout>
+                </androidx.cardview.widget.CardView>
+
+                <androidx.cardview.widget.CardView
+                    android:id="@+id/card_medium_risk"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_columnWeight="1"
+                    app:cardCornerRadius="16dp"
+                    app:cardBackgroundColor="#FFFBF0"
+                    app:cardElevation="0dp"
+                    app:cardUseCompatPadding="true">
+                    <LinearLayout android:orientation="horizontal" android:padding="16dp" android:gravity="center_vertical" android:layout_width="match_parent" android:layout_height="wrap_content">
+                        <ImageView android:src="@drawable/ic_risk_medium" app:tint="#F0AD4E" android:layout_width="24dp" android:layout_height="24dp" android:layout_marginEnd="8dp"/>
+                        <TextView
+                            android:id="@+id/text_medium_risk"
+                            android:text="Medium Risk (25)"
+                            android:textColor="#F0AD4E"
+                            android:textStyle="bold"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"/>
+                    </LinearLayout>
+                </androidx.cardview.widget.CardView>
+
+                <androidx.cardview.widget.CardView
+                    android:id="@+id/card_low_risk"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_columnWeight="1"
+                    app:cardCornerRadius="16dp"
+                    app:cardBackgroundColor="#F0F8FF"
+                    app:cardElevation="0dp"
+                    app:cardUseCompatPadding="true">
+                    <LinearLayout android:orientation="horizontal" android:padding="16dp" android:gravity="center_vertical" android:layout_width="match_parent" android:layout_height="wrap_content">
+                        <ImageView android:src="@drawable/ic_check_circle" app:tint="#60B6D7" android:layout_width="24dp" android:layout_height="24dp" android:layout_marginEnd="8dp"/>
+                        <TextView
+                            android:id="@+id/text_low_risk"
+                            android:text="Low Risk (0)"
+                            android:textColor="#60B6D7"
+                            android:textStyle="bold"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"/>
+                    </LinearLayout>
+                </androidx.cardview.widget.CardView>
+
+                <androidx.cardview.widget.CardView
+                    android:id="@+id/card_no_risk"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_columnWeight="1"
+                    app:cardCornerRadius="16dp"
+                    app:cardBackgroundColor="#F0F8FF"
+                    app:cardElevation="0dp"
+                    app:cardUseCompatPadding="true">
+                    <LinearLayout android:orientation="horizontal" android:padding="16dp" android:gravity="center_vertical" android:layout_width="match_parent" android:layout_height="wrap_content">
+                        <ImageView android:src="@drawable/ic_no_risk"
+                            app:tint="#60B6D7" android:layout_width="24dp" android:layout_height="24dp" android:layout_marginEnd="8dp"/>
+                        <TextView
+                            android:id="@+id/text_no_risk"
+                            android:text="No Risk (2)"
+                            android:textColor="#60B6D7"
+                            android:textStyle="bold"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"/>
+                    </LinearLayout>
+                </androidx.cardview.widget.CardView>
+
+            </GridLayout>
+
+            <ImageView
+                android:id="@+id/recommendations_icon"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:src="@drawable/ic_lightbulb"
+                app:tint="#F0AD4E"
+                android:layout_marginTop="32dp"
+                app:layout_constraintTop_toBottomOf="@id/risk_grid"
+                app:layout_constraintStart_toStartOf="parent"/>
+
+            <TextView
+                android:id="@+id/recommendations_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="AI Recommendations"
+                android:textColor="#2C3E50"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                android:layout_marginStart="8dp"
+                app:layout_constraintStart_toEndOf="@id/recommendations_icon"
+                app:layout_constraintTop_toTopOf="@id/recommendations_icon"
+                app:layout_constraintBottom_toBottomOf="@id/recommendations_icon"/>
+
+            <LinearLayout
+                android:id="@+id/recommendations_list"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_columnWeight="1"
-                app:cardCornerRadius="16dp"
-                app:cardBackgroundColor="#FFFBF0"
-                app:cardElevation="0dp"
-                app:cardUseCompatPadding="true">
-                <LinearLayout android:orientation="horizontal" android:padding="16dp" android:gravity="center_vertical" android:layout_width="match_parent" android:layout_height="wrap_content">
-                    <ImageView android:src="@drawable/ic_risk_medium" app:tint="#F0AD4E" android:layout_width="24dp" android:layout_height="24dp" android:layout_marginEnd="8dp"/>
-                    <TextView
-                        android:id="@+id/text_medium_risk"
-                        android:text="Medium Risk (25)"
-                        android:textColor="#F0AD4E"
-                        android:textStyle="bold"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"/>
-                </LinearLayout>
-            </androidx.cardview.widget.CardView>
+                android:orientation="vertical"
+                android:layout_marginTop="16dp"
+                android:background="@drawable/grid_item_background"
+                app:layout_constraintTop_toBottomOf="@id/recommendations_icon"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"/>
 
-            <androidx.cardview.widget.CardView
-                android:id="@+id/card_low_risk"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_columnWeight="1"
-                app:cardCornerRadius="16dp"
-                app:cardBackgroundColor="#F0F8FF"
-                app:cardElevation="0dp"
-                app:cardUseCompatPadding="true">
-                <LinearLayout android:orientation="horizontal" android:padding="16dp" android:gravity="center_vertical" android:layout_width="match_parent" android:layout_height="wrap_content">
-                    <ImageView android:src="@drawable/ic_check_circle" app:tint="#60B6D7" android:layout_width="24dp" android:layout_height="24dp" android:layout_marginEnd="8dp"/>
-                    <TextView
-                        android:id="@+id/text_low_risk"
-                        android:text="Low Risk (0)"
-                        android:textColor="#60B6D7"
-                        android:textStyle="bold"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"/>
-                </LinearLayout>
-            </androidx.cardview.widget.CardView>
+        </androidx.constraintlayout.widget.ConstraintLayout>
 
-            <androidx.cardview.widget.CardView
-                android:id="@+id/card_no_risk"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_columnWeight="1"
-                app:cardCornerRadius="16dp"
-                app:cardBackgroundColor="#F0F8FF"
-                app:cardElevation="0dp"
-                app:cardUseCompatPadding="true">
-                <LinearLayout android:orientation="horizontal" android:padding="16dp" android:gravity="center_vertical" android:layout_width="match_parent" android:layout_height="wrap_content">
-                    <ImageView android:src="@drawable/ic_no_risk"
-                        app:tint="#60B6D7" android:layout_width="24dp" android:layout_height="24dp" android:layout_marginEnd="8dp"/>
-                    <TextView
-                        android:id="@+id/text_no_risk"
-                        android:text="No Risk (2)"
-                        android:textColor="#60B6D7"
-                        android:textStyle="bold"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"/>
-                </LinearLayout>
-            </androidx.cardview.widget.CardView>
+    </FrameLayout>
 
-        </GridLayout>
-
-        <ImageView
-            android:id="@+id/recommendations_icon"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
-            android:src="@drawable/ic_lightbulb"
-            app:tint="#F0AD4E"
-            android:layout_marginTop="32dp"
-            app:layout_constraintTop_toBottomOf="@id/risk_grid"
-            app:layout_constraintStart_toStartOf="parent"/>
-
-        <TextView
-            android:id="@+id/recommendations_title"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="AI Recommendations"
-            android:textColor="#2C3E50"
-            android:textSize="20sp"
-            android:textStyle="bold"
-            android:layout_marginStart="8dp"
-            app:layout_constraintStart_toEndOf="@id/recommendations_icon"
-            app:layout_constraintTop_toTopOf="@id/recommendations_icon"
-            app:layout_constraintBottom_toBottomOf="@id/recommendations_icon"/>
-
-        <LinearLayout
-            android:id="@+id/recommendations_list"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:layout_marginTop="16dp"
-            android:background="@drawable/grid_item_background"
-            app:layout_constraintTop_toBottomOf="@id/recommendations_icon"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent">
-
-        </LinearLayout>
-    </androidx.constraintlayout.widget.ConstraintLayout>
 </androidx.core.widget.NestedScrollView>
