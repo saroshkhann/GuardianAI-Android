@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_margin="6dp"
+    app:cardCornerRadius="16dp"
+    app:cardElevation="0dp"
+    app:cardBackgroundColor="#F4F6F9">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:gravity="start">
+
+        <ImageView
+            android:id="@+id/permission_icon"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            app:tint="?attr/colorPrimary"
+            tools:src="@drawable/ic_camera"/>
+
+        <TextView
+            android:id="@+id/permission_name"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:textColor="@android:color/black"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            tools:text="Camera" />
+
+        <TextView
+            android:id="@+id/permission_app_count"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:textColor="@android:color/darker_gray"
+            android:textSize="13sp"
+            tools:text="5/62" />
+
+    </LinearLayout>
+</com.google.android.material.card.MaterialCardView>
