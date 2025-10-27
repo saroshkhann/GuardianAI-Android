@@ -9,11 +9,22 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 import java.util.List;
 
-// You can reuse your PermissionCategory data class
 public class PermissionGridAdapter extends RecyclerView.Adapter<PermissionGridAdapter.GridViewHolder> {
 
     private List<PermissionCategory> categoryList;
-    // TODO: Add click listener
+
+    // --- 1. Click Listener Interface ---
+    public interface OnCategoryClickListener {
+        void onCategoryClick(PermissionCategory category);
+    }
+
+    private OnCategoryClickListener clickListener;
+
+    public void setOnCategoryClickListener(OnCategoryClickListener listener) {
+        this.clickListener = listener;
+    }
+    // --- End Click Listener ---
+
 
     public PermissionGridAdapter(List<PermissionCategory> categoryList) {
         this.categoryList = categoryList;
@@ -31,9 +42,18 @@ public class PermissionGridAdapter extends RecyclerView.Adapter<PermissionGridAd
     public void onBindViewHolder(@NonNull GridViewHolder holder, int position) {
         PermissionCategory category = categoryList.get(position);
 
-        holder.permissionIcon.setImageResource(category.iconResId);
-        holder.permissionName.setText(category.name);
-        holder.permissionAppCount.setText(category.appCount + "/" + category.totalAppCount);
+        holder.permissionIcon.setImageResource(category.getIconResId());
+        holder.permissionName.setText(category.getName());
+
+        String countText = category.getAppCount() + "/" + category.getTotalAppCount();
+        holder.permissionAppCount.setText(countText);
+
+        // --- 2. Set the click listener on the item view ---
+        holder.itemView.setOnClickListener(v -> {
+            if (clickListener != null) {
+                clickListener.onCategoryClick(category);
+            }
+        });
     }
 
     @Override
@@ -46,7 +66,6 @@ public class PermissionGridAdapter extends RecyclerView.Adapter<PermissionGridAd
         notifyDataSetChanged();
     }
 
-    // ViewHolder class
     public static class GridViewHolder extends RecyclerView.ViewHolder {
         ImageView permissionIcon;
         TextView permissionName;

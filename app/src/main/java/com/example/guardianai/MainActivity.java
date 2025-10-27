@@ -70,8 +70,11 @@ public class MainActivity extends AppCompatActivity {
                     selectedFragment = new DashboardFragment();
                 }
             } else if (itemId == R.id.nav_permissions) {
-                // TODO: Create and assign PermissionsFragment
-                Toast.makeText(this, "Permissions Clicked (Not Implemented)", Toast.LENGTH_SHORT).show();
+                // --- THIS IS THE FIX ---
+                if (!(currentFragment instanceof PermissionFragment)) {
+                    selectedFragment = new PermissionFragment();
+                }
+                // --- END OF FIX ---
             } else if (itemId == R.id.nav_controls) {
                 // TODO: Create and assign ControlsFragment
                 Toast.makeText(this, "Controls Clicked (Not Implemented)", Toast.LENGTH_SHORT).show();
