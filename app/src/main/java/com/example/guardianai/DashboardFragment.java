@@ -66,7 +66,7 @@ public class DashboardFragment extends Fragment {
     private ProgressBar loadingSpinner;
     private ConstraintLayout mainContentGroup;
     private SwipeRefreshLayout swipeRefreshLayout;
-    private NestedScrollView nestedScrollView; // <-- ADDED MISSING VARIABLE
+    // <-- ADDED MISSING VARIABLE
     private Button btnViewSensorLog;
     // --- Logic Components ---
     private PermissionAnalyzer analyzer;
@@ -122,24 +122,7 @@ public class DashboardFragment extends Fragment {
             });
         }
 
-        // --- CRITICAL FIX: SCROLL LISTENER LOGIC ---
-        if (nestedScrollView != null && swipeRefreshLayout != null) {
-            // This listener enables/disables the SwipeRefreshLayout based on scroll position
-            nestedScrollView.setOnScrollChangeListener(new NestedScrollView.OnScrollChangeListener() {
-                @Override
-                public void onScrollChange(NestedScrollView v, int scrollX, int scrollY, int oldScrollX, int oldScrollY) {
-                    // If scrollY is 0, we are at the top of the content.
-                    if (scrollY == 0) {
-                        swipeRefreshLayout.setEnabled(true);
-                    } else {
-                        // We have scrolled down, disable SwipeRefreshLayout
-                        swipeRefreshLayout.setEnabled(false);
-                    }
-                }
-            });
-            // Initial state: Enable it, assuming we load at the top
-            swipeRefreshLayout.setEnabled(true);
-        }
+
         // --- END CRITICAL FIX ---
         if (btnViewSensorLog != null) {
             btnViewSensorLog.setOnClickListener(v -> navigateToSensorLog());
@@ -184,7 +167,7 @@ public class DashboardFragment extends Fragment {
         loadingSpinner = view.findViewById(R.id.loading_spinner);
         mainContentGroup = view.findViewById(R.id.main_content_group);
         swipeRefreshLayout = view.findViewById(R.id.swipe_refresh_layout);
-        nestedScrollView = view.findViewById(R.id.nested_scroll_view_root); // <-- FIND MISSING VIEW
+
         btnViewSensorLog = view.findViewById(R.id.btn_view_sensor_log);
         Log.d(TAG, "Views initialized.");
     }
