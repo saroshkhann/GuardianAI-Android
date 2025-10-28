@@ -39,6 +39,7 @@
                 android:layout_height="wrap_content"
                 android:padding="16dp"
                 android:visibility="gone"
+                android:background="@android:color/white"
                 tools:context=".DashboardFragment"
                 tools:visibility="visible">
 
