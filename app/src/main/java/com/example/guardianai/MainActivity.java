@@ -1,5 +1,13 @@
 package com.example.guardianai; // Ensure this matches your package
+import android.Manifest;
+import android.content.pm.PackageManager;
+import androidx.core.content.ContextCompat;
+import androidx.core.app.ActivityCompat; // <-- CRITICAL: For requestPermissions
+import java.util.List;
+import java.util.ArrayList;
 
+import android.Manifest; // CRITICAL: Ensure this is imported at the top
+import androidx.core.app.ActivityCompat; // CRITICAL: Ensure this is imported at the top
 import androidx.annotation.NonNull; // Import NonNull
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat; // Import ActivityCompat
