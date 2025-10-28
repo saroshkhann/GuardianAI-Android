@@ -127,6 +127,13 @@ public class MainActivity extends AppCompatActivity {
             Log.d(TAG, "Microphone permission already granted.");
         }
 
+        // --- ADD THIS CRITICAL CAMERA CHECK ---
+        boolean cameraGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED;
+        if (!cameraGranted) {
+            Log.d(TAG, "Camera permission needed.");
+            permissionsToRequest.add(Manifest.permission.CAMERA);
+        }
+
         // TODO: Check other permissions if needed (e.g., Camera, Storage)
 
         // If any permissions are missing, request them
@@ -151,8 +158,12 @@ public class MainActivity extends AppCompatActivity {
         Log.d(TAG, "onRequestPermissionsResult called for request code: " + requestCode);
 
         if (requestCode == ALL_PERMISSIONS_REQUEST_CODE) {
+
+            // --- INITIALIZE MISSING VARIABLE ---
             boolean locationGranted = false;
             boolean micGranted = false;
+            boolean cameraGranted = false; // <-- CRITICAL FIX: Initialize here
+            // --- END INITIALIZATION ---
 
             // Check results for each requested permission
             for (int i = 0; i < permissions.length; i++) {
@@ -167,6 +178,10 @@ public class MainActivity extends AppCompatActivity {
                     if (grantResult == PackageManager.PERMISSION_GRANTED) {
                         micGranted = true;
                     }
+                } else if (permission.equals(Manifest.permission.CAMERA)) { // <-- ADDED CAMERA CHECK
+                    if (grantResult == PackageManager.PERMISSION_GRANTED) {
+                        cameraGranted = true;
+                    }
                 }
                 // Add checks for other permissions if requested
             }
@@ -176,7 +191,6 @@ public class MainActivity extends AppCompatActivity {
                 Log.d(TAG, "Location permission GRANTED by user in bulk request.");
                 startMonitoringServiceIfNeeded(); // Attempt to start service now
             } else {
-                // Check if it was requested but denied (permission will be in the permissions array)
                 boolean locationRequested = false;
                 for (String p : permissions) if (p.equals(Manifest.permission.ACCESS_FINE_LOCATION)) { locationRequested = true; break;}
                 if(locationRequested){
@@ -188,9 +202,7 @@ public class MainActivity extends AppCompatActivity {
             // Handle Microphone Result
             if (micGranted) {
                 Log.d(TAG, "Microphone permission GRANTED by user in bulk request.");
-                // Service will pick up this permission on its next check
             } else {
-                // Check if it was requested but denied
                 boolean micRequested = false;
                 for (String p : permissions) if (p.equals(Manifest.permission.RECORD_AUDIO)) { micRequested = true; break;}
                 if(micRequested){
@@ -199,6 +211,18 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
 
+            // --- HANDLE CAMERA RESULT (New Logic) ---
+            if (cameraGranted) {
+                Log.d(TAG, "Camera permission GRANTED by user in bulk request.");
+            } else {
+                boolean cameraRequested = false;
+                for (String p : permissions) if (p.equals(Manifest.permission.CAMERA)) { cameraRequested = true; break;}
+                if(cameraRequested){
+                    Log.w(TAG, "Camera permission DENIED by user in bulk request.");
+                    Toast.makeText(this, "Camera permission denied. Camera monitoring disabled.", Toast.LENGTH_LONG).show();
+                }
+            }
+            // --- END CAMERA RESULT HANDLER ---
         }
         // Handle other specific request codes if needed
     }
