@@ -134,7 +134,7 @@ public class MonitoringService extends Service {
         if (usm == null) return;
 
         long endTime = System.currentTimeMillis();
-        long startTime = endTime - 6000; // Check events that occurred in the last 6 seconds
+        long startTime = endTime - 60000; // Check events that occurred in the last 6 seconds
 
         UsageEvents events = usm.queryEvents(startTime, endTime);
 
