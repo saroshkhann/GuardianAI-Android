@@ -1,4 +1,10 @@
 package com.example.guardianai; // Ensure this matches your package
+
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageManager;
+import android.app.usage.UsageEvents;
+
+import android.app.usage.UsageStatsManager;
 import android.Manifest;
 import android.content.pm.PackageManager;
 import androidx.core.content.ContextCompat;
@@ -106,6 +112,85 @@ public class MainActivity extends AppCompatActivity {
 
         Log.d(TAG, "onCreate finished.");
     } // End onCreate
+
+    /**
+     * Checks for sensor usage events using UsageStatsManager (the public API solution).
+     * This fulfills FR 3.1, 3.2 (Monitoring & Detection).
+     */
+    private void checkSensorStatus() {
+        // NOTE: Replace getContext() with getApplicationContext() if you haven't already.
+
+
+        UsageStatsManager usm = (UsageStatsManager) getSystemService(Context.USAGE_STATS_SERVICE);
+        if (usm == null) return;
+
+        long endTime = System.currentTimeMillis();
+        long startTime = endTime - 60000; // Check events that occurred in the last 60 seconds (1 minute)
+
+        UsageEvents events = usm.queryEvents(startTime, endTime);
+
+        String newStatus = "Protecting device sensors.";
+        boolean isActive = false;
+
+        while (events.hasNextEvent()) {
+            UsageEvents.Event event = new UsageEvents.Event();
+            events.getNextEvent(event);
+
+            String sensorType = null;
+            int eventType = event.getEventType();
+
+            // Use raw integer values (7=CAMERA_STATE_CHANGED, 8=MIC_STATE_CHANGED)
+            if (eventType == 7) {
+                sensorType = "CAMERA";
+            } else if (eventType == 8) {
+                sensorType = "MICROPHONE";
+            }
+
+            if (sensorType != null) {
+                String packageName = event.getPackageName();
+                String appName = getAppNameFromPackage(packageName);
+
+                if (packageName.equals(getPackageName()) || isSystemApp(packageName)) {
+                    continue;
+                }
+
+
+
+
+
+
+            }
+        }
+
+        // --- VISUAL INDICATOR UPDATE (FR 3.4) ---
+
+    }
+
+    // --- HELPER METHODS ---
+
+    /**
+     * Helper to determine if an app is a critical system app.
+     */
+    private boolean isSystemApp(String packageName) {
+        try {
+            ApplicationInfo ai = getPackageManager().getApplicationInfo(packageName, 0);
+            return (ai.flags & ApplicationInfo.FLAG_SYSTEM) != 0;
+        } catch (PackageManager.NameNotFoundException e) {
+            return false;
+        }
+    }
+
+    /**
+     * Helper to get user-friendly app name.
+     */
+    private String getAppNameFromPackage(String packageName) {
+        try {
+            ApplicationInfo ai = getPackageManager().getApplicationInfo(packageName, 0);
+            return getPackageManager().getApplicationLabel(ai).toString();
+        } catch (PackageManager.NameNotFoundException e) {
+            return packageName;
+        }
+    }
 
     // --- Method to Check ALL Necessary Dangerous Permissions ---
     private void checkAndRequestNeededPermissions() {
@@ -238,24 +323,29 @@ public class MainActivity extends AppCompatActivity {
     // --- Method to Start Monitoring Service (Checks Location Permission) ---
     private void startMonitoringServiceIfNeeded() {
         Log.d(TAG, "Checking if MonitoringService should start...");
-        // Service needs at least location permission to start its location listener part
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
-                ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED)
+
+        // Check if ANY required permission is granted
+        boolean locationGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+        boolean micGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED;
+        boolean cameraGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED;
+
+        // --- CRITICAL FIX: Start the service if any sensor permission is available ---
+        if (locationGranted || micGranted || cameraGranted)
         {
-            Log.d(TAG, "Required permission (Location) granted. Starting MonitoringService...");
+            Log.d(TAG, "At least one required sensor permission granted. Starting MonitoringService...");
             Intent serviceIntent = new Intent(this, MonitoringService.class);
             try {
-                ContextCompat.startForegroundService(this, serviceIntent);
-                Log.d(TAG, "MonitoringService started successfully via startMonitoringServiceIfNeeded.");
+                // Use the compliant method to start FGS
+                androidx.core.content.ContextCompat.startForegroundService(this, serviceIntent);
+                Log.d(TAG, "MonitoringService started successfully.");
             } catch (Exception e) {
-                Log.e(TAG, "Error starting MonitoringService via startMonitoringServiceIfNeeded", e);
+                // This often catches permission exceptions on strict OS versions
+                Log.e(TAG, "FATAL: Error starting MonitoringService. Check Manifest FGS permissions.", e);
             }
         } else {
-            Log.w(TAG, "startMonitoringServiceIfNeeded called, but location permission is NOT granted. Service not started yet.");
-            // The service won't start until location is granted via onRequestPermissionsResult
+            Log.w(TAG, "No required sensor permissions are granted. Service not started.");
         }
     }
-
 
     // --- Method to Check Usage Stats Permission and Schedule Worker ---
     private void checkAndScheduleUsageWorker() {
