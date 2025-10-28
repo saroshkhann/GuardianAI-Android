@@ -1,537 +1,293 @@
-package com.example.guardianai; // Ensure this matches your package
+package com.example.guardianai;
 
-import android.Manifest; // Needed for permission constants
-import android.app.AppOpsManager;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
-import android.app.PendingIntent;
 import android.app.Service;
-import android.app.usage.UsageStats;
-import android.app.usage.UsageStatsManager;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
-import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
-import android.hardware.camera2.CameraManager;
-import android.location.Location;
-import android.location.LocationListener;
-import android.location.LocationManager;
-import android.media.AudioFormat;
-import android.media.AudioRecord;
-import android.media.MediaRecorder;
 import android.os.Build;
-import android.os.Bundle; // For LocationListener methods
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 import android.os.Process;
 import android.util.Log;
 
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-import androidx.core.app.ActivityCompat;
 import androidx.core.app.NotificationCompat;
 
-// --- Room Database Imports ---
-import com.example.guardianai.AppDatabase;
-import com.example.guardianai.Recommendation;
-import com.example.guardianai.RecommendationDao;
-// --- End Room Imports ---
-
-// --- GSON Imports ---
-import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
-import java.lang.reflect.Type;
-// --- End GSON Imports ---
-
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.Timer;
-import java.util.TimerTask;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
-public class MonitoringService extends Service { // Removed implements LocationListener
+// --- Imports needed for UsageStatsManager logic (CRITICAL FIX) ---
+import android.app.usage.UsageEvents;
+import android.app.usage.UsageStatsManager;
+
+import java.util.List;
+import java.util.HashMap;
+
+
+
+public class MonitoringService extends Service {
 
     private static final String TAG = "MonitoringService";
-    private static final String CHANNEL_ID = "GuardianAI_MonitoringChannel";
+    private static final String CHANNEL_ID = "GuardianAISensorChannel";
     private static final int NOTIFICATION_ID = 1;
 
-    // --- Recommendation Type Constants ---
-    private static final String RECOMMENDATION_TYPE_CLIPBOARD = "CLIPBOARD_ACCESS";
-    private static final String RECOMMENDATION_TYPE_CAMERA = "CAMERA_ACCESS";
-    private static final String RECOMMENDATION_TYPE_LOCATION = "LOCATION_ACCESS";
-    private static final String RECOMMENDATION_TYPE_MICROPHONE = "MICROPHONE_ACCESS";
-    private static final String RECOMMENDATION_TYPE_PERM_GRANTED = "PERMISSION_GRANTED";
-    private static final String RECOMMENDATION_TYPE_PERM_REVOKED = "PERMISSION_REVOKED";
+    // --- MONITORING COMPONENTS ---
+    private SensorMonitorManager monitorManager;
+    private ScheduledExecutorService scheduler;
+    private ClipboardManager clipboardManager;
+    private ClipboardManager.OnPrimaryClipChangedListener clipListener;
 
+    // --- LOGGING COMPONENTS ---
+    private SensorLogDao sensorLogDao;
+    private ExecutorService logExecutor;
 
-    // --- Service Components ---
+    // --- EXISTING DASHBOARD COMPONENTS (needed for completeness) ---
     private RecommendationDao recommendationDao;
     private ExecutorService databaseExecutor;
-    private ClipboardManager clipboardManager;
-    private ClipboardManager.OnPrimaryClipChangedListener clipChangedListener;
-    private CameraManager cameraManager;
-    private CameraManager.AvailabilityCallback cameraCallback;
+    private Handler micCheckHandler;
 
-    // --- Location Monitoring ---
-    private LocationManager locationManager;
-    private LocationListener locationServiceListener; // Reference to the inner listener class
-    private long lastLocationLogTime = 0;
-    private static final long LOCATION_RATE_LIMIT_MS = 60000; // 1 minute limit
-
-    // --- Microphone Monitoring ---
-    private Timer micCheckTimer;
-    private boolean isMicInUse = false;
-    private static final long MIC_CHECK_INTERVAL_MS = 30000; // 30 seconds
-    private Handler micCheckHandler; // Handler for scheduling mic check
-    private Runnable micCheckRunnable; // Runnable for mic check task
-
-    // --- Permission Status Monitoring ---
-    private Timer permissionCheckTimer;
-    private static final long PERMISSION_CHECK_INTERVAL_MS = 15 * 60 * 1000;
-    private SharedPreferences permissionStatusPrefs;
-    private Gson gson = new Gson();
-    private static final String PERM_STATUS_PREFS_NAME = "GuardianAI_PermStatus";
-    private static final String PERM_STATUS_KEY = "permission_statuses";
-    private static final String[] KEY_PERMISSIONS_TO_MONITOR = {
-            Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO,
-            Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.READ_CONTACTS,
-            Manifest.permission.READ_SMS
-    };
-
-
-    // --- Lifecycle Methods ---
+    // Tracks the current status text and activity
+    private String currentStatusText = "Protecting device sensors.";
+    private boolean isMicActive = false;
+    private boolean isCameraActive = false;
 
     @Override
     public void onCreate() {
         super.onCreate();
-        Log.d(TAG, "onCreate: Service creating.");
+        Log.d(TAG, "Service created and initializing.");
+
+        monitorManager = new SensorMonitorManager(this);
         createNotificationChannel();
-        Log.d(TAG, "Notification channel created or already exists.");
+        startForeground(NOTIFICATION_ID, buildForegroundNotification());
 
         try {
             AppDatabase db = AppDatabase.getDatabase(getApplicationContext());
+
             recommendationDao = db.recommendationDao();
             databaseExecutor = Executors.newSingleThreadExecutor();
             micCheckHandler = new Handler(Looper.getMainLooper());
-            Log.d(TAG, "Database DAO and Executor initialized.");
-        } catch (Exception e) { Log.e(TAG, "Error initializing DB/Executor", e); stopSelf(); return; }
 
-        initializeClipboardMonitoring();
-        initializeCameraMonitoring();
-        initializeLocationMonitoring(); // Initialization is now inside a separate method
-        startMicMonitoring();
-        initializePermissionStatusMonitoring();
+            sensorLogDao = db.sensorLogDao();
+            logExecutor = Executors.newSingleThreadExecutor();
+
+            Log.d(TAG, "All DAOs and Executors initialized.");
+        } catch (Exception e) {
+            Log.e(TAG, "Fatal Error initializing DB/Executors.", e);
+            stopSelf();
+            return;
+        }
+
+        setupClipboardMonitoring();
+
+        scheduler = Executors.newSingleThreadScheduledExecutor();
+        startMonitoringLogic();
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        Log.d(TAG, "onStartCommand received.");
-        Notification notification = createForegroundNotification();
-        try {
-            startForeground(NOTIFICATION_ID, notification);
-            Log.d(TAG, "Service started in foreground.");
-        } catch (Exception e) { Log.e(TAG, "Error starting foreground service", e); stopSelf(); return START_NOT_STICKY; }
+        Log.d(TAG, "Service started/restarted.");
+        startMonitoringLogic();
         return START_STICKY;
     }
 
-    @Nullable @Override public IBinder onBind(Intent intent) { return null; }
+    @Override
+    public IBinder onBind(Intent intent) {
+        return null;
+    }
 
     @Override
     public void onDestroy() {
         super.onDestroy();
-        Log.d(TAG, "onDestroy: Service stopping.");
+        Log.d(TAG, "Service destroyed. Cleaning up.");
 
-        // --- Clean up Listeners ---
-        // ... (Clipboard and Camera cleanup code remains the same) ...
+        if (clipboardManager != null && clipListener != null) {
+            clipboardManager.removePrimaryClipChangedListener(clipListener);
+        }
+        if (scheduler != null) {
+            scheduler.shutdownNow();
+        }
+    }
 
-        // --- FIX: Remove Location Updates using the inner class reference ---
-        if (locationManager != null && locationServiceListener != null) {
-            try {
-                locationManager.removeUpdates(locationServiceListener); // CORRECTED LINE
-                Log.d(TAG, "Location updates removed.");
-            } catch (Exception e) {
-                Log.e(TAG, "Error removing location updates", e);
+    // --- CORE MONITORING LOGIC (FR 3.1, 3.2, 3.4, 3.6) ---
+
+    private void startMonitoringLogic() {
+        if (scheduler != null && !scheduler.isShutdown()) {
+            scheduler.scheduleAtFixedRate(this::checkSensorStatus, 0, 5, TimeUnit.SECONDS);
+        }
+    }
+
+    /**
+     * Checks for sensor usage events using UsageStatsManager (the public API solution).
+     * This fulfills FR 3.1, 3.2 (Monitoring & Detection).
+     */
+    private void checkSensorStatus() {
+        if (monitorManager == null || getApplicationContext() == null) return;
+
+        UsageStatsManager usm = (UsageStatsManager) getSystemService(Context.USAGE_STATS_SERVICE);
+        if (usm == null) return;
+
+        long endTime = System.currentTimeMillis();
+        long startTime = endTime - 6000; // Check events that occurred in the last 6 seconds
+
+        UsageEvents events = usm.queryEvents(startTime, endTime);
+
+        String newStatus = "Protecting device sensors.";
+        boolean isActive = false;
+
+        while (events.hasNextEvent()) {
+            UsageEvents.Event event = new UsageEvents.Event();
+            events.getNextEvent(event);
+
+            String sensorType = null;
+            int eventType = event.getEventType();
+
+            // 1. Identify Sensor Events based on public event types (using integer values to fix compilation)
+            if (eventType == 7) { // 7 is the integer value for CAMERA_STATE_CHANGED
+                sensorType = "CAMERA";
+            } else if (eventType == 8) { // 8 is the integer value for MIC_STATE_CHANGED
+                sensorType = "MICROPHONE";
+            }
+
+            // 2. Process Detected Event
+            if (sensorType != null) {
+                String packageName = event.getPackageName();
+                String appName = getAppNameFromPackage(packageName);
+
+                // Filter out self-app and system apps
+                if (packageName.equals(getPackageName()) || isSystemApp(packageName)) {
+                    continue;
+                }
+
+                // Check user preferences to ensure monitoring is enabled
+                boolean isMonitoringEnabled = (sensorType.equals("CAMERA") && monitorManager.isCameraMonitoringEnabled()) ||
+                        (sensorType.equals("MICROPHONE") && monitorManager.isMicMonitoringEnabled());
+
+                if (isMonitoringEnabled) {
+                    // If the event is 'OPEN' (1) or 'ACQUIRED' (3), it's a new access
+                    // NOTE: Event constants are often hidden, using raw values for public API workaround
+                    if (event.getEventType() == 1 || event.getEventType() == 3) {
+
+                        newStatus = sensorType + " active by: " + appName;
+                        isActive = true;
+
+                        // Log the event and alert (FR 3.3/3.6)
+                        logSensorEvent(packageName, appName, sensorType, true);
+
+                        // Update status tracking
+                        if (sensorType.equals("CAMERA")) isCameraActive = true;
+                        if (sensorType.equals("MICROPHONE")) isMicActive = true;
+
+                        // Break the loop once one active monitored event is found
+                        break;
+                    }
+                }
             }
         }
-        // ... (rest of onDestroy) ...
 
-
-        stopMicMonitoring();
-        stopPermissionStatusMonitoring();
-        // --- Shutdown Executor ---
-        if (databaseExecutor != null && !databaseExecutor.isShutdown()) { databaseExecutor.shutdown(); Log.d(TAG, "Database executor shut down requested."); }
-        Log.d(TAG,"MonitoringService destroyed.");
-    }
-
-
-    // --- Initialization Helpers ---
-    private void initializeClipboardMonitoring() {
-        clipboardManager = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-        if (clipboardManager != null) {
-            clipChangedListener = () -> { Log.i(TAG, "Clipboard content changed!"); handleClipboardChange(); };
-            clipboardManager.addPrimaryClipChangedListener(clipChangedListener);
-            Log.d(TAG, "Clipboard listener added.");
-        } else { Log.e(TAG, "ClipboardManager is null."); }
-    }
-
-    private void initializeCameraMonitoring() {
-        cameraManager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
-        if (cameraManager != null) {
-            cameraCallback = new CameraManager.AvailabilityCallback() {
-                @Override public void onCameraAvailable(@NonNull String id) { super.onCameraAvailable(id); Log.i(TAG, "Cam ["+id+"] available."); }
-                @Override public void onCameraUnavailable(@NonNull String id) { super.onCameraUnavailable(id); Log.w(TAG, "Cam ["+id+"] unavailable!"); handleSensorUsage("CAMERA"); }
-            };
-            try { cameraManager.registerAvailabilityCallback(cameraCallback, new Handler(Looper.getMainLooper())); Log.d(TAG, "Camera callback registered."); }
-            catch (Exception e){ Log.e(TAG, "Error registering camera callback", e); }
-        } else { Log.e(TAG, "CameraManager is null."); }
-    }
-
-    private void initializeLocationMonitoring() {
-        locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
-        locationServiceListener = new InternalLocationListener(); // Instantiate the inner listener
-        if (locationManager != null) {
-            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
-                    ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-                Log.d(TAG, "Location permission OK, requesting updates.");
-                try {
-                    long minTimeMs = 15000; float minDistanceM = 50;
-                    boolean networkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
-                    boolean gpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
-                    // Pass the inner listener instance to requestLocationUpdates
-                    if (networkEnabled) locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, minTimeMs, minDistanceM, locationServiceListener);
-                    if (gpsEnabled) locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, minTimeMs, minDistanceM, locationServiceListener);
-                    if (networkEnabled || gpsEnabled) Log.d(TAG, "Requested location updates.");
-                    else Log.w(TAG, "No location providers enabled.");
-                } catch (SecurityException e) { Log.e(TAG, "SecurityException requesting location?", e); }
-            } else { Log.w(TAG, "Location permission NOT granted."); }
-        } else { Log.e(TAG, "LocationManager is null."); }
-    }
-
-    private void initializePermissionStatusMonitoring() {
-        permissionStatusPrefs = getSharedPreferences(PERM_STATUS_PREFS_NAME, Context.MODE_PRIVATE);
-        startPermissionStatusMonitoring();
-    }
-
-
-    // --- Core Logic Methods ---
-
-    /** Handles Clipboard Change Event. */
-    private void handleClipboardChange() {
-        Log.d(TAG, "Handling clipboard change event...");
-        String foregroundAppPackage = getForegroundAppPackageName();
-        if (isValidStateForDbOperation(foregroundAppPackage)) {
-            Log.i(TAG, "Clipboard accessed likely by: " + foregroundAppPackage);
-            saveRecommendationToDb(foregroundAppPackage, "CLIPBOARD");
-        } else { logFailureReason("clipboard change", foregroundAppPackage); }
-    }
-
-    /** Handles Sensor Usage Event (Camera, Location, Microphone). */
-    private void handleSensorUsage(String sensorType) {
-        Log.d(TAG, "Handling sensor usage event for: " + sensorType);
-
-        // --- Location Rate Limiting Check ---
-        if ("LOCATION".equals(sensorType)) {
-            long currentTime = System.currentTimeMillis();
-            if (currentTime - lastLocationLogTime < LOCATION_RATE_LIMIT_MS) {
-                Log.d(TAG, "LOCATION event rate limited. Skipping DB save.");
-                return; // ABORT if rate limit applies
-            }
-            lastLocationLogTime = currentTime; // Update timestamp
+        // --- VISUAL INDICATOR UPDATE (FR 3.4) ---
+        if (!newStatus.equals(currentStatusText)) {
+            updateForegroundNotification(newStatus);
+            currentStatusText = newStatus;
         }
-        // --- END Rate Limiting Check ---
-
-        String foregroundAppPackage = getForegroundAppPackageName();
-        if (isValidStateForDbOperation(foregroundAppPackage)) {
-            Log.i(TAG, sensorType + " accessed likely by: " + foregroundAppPackage);
-            // TODO: Implement rate limiting for other sensors if needed
-            saveRecommendationToDb(foregroundAppPackage, sensorType);
-        } else { logFailureReason(sensorType + " usage", foregroundAppPackage); }
     }
 
-    /** Saves a recommendation to the database on a background thread. */
-    private void saveRecommendationToDb(String packageName, String eventType) {
-        final String finalPackageName = packageName;
-        final String finalEventType = eventType;
-        final String recommendationType = eventType + "_ACCESS";
 
-        databaseExecutor.execute(() -> {
-            Log.d(TAG, "BG Task: Saving " + finalEventType + " recommendation for " + finalPackageName);
-            String appName = getAppNameFromPackage(finalPackageName);
-            String title = finalEventType.substring(0, 1).toUpperCase() + finalEventType.substring(1).toLowerCase() + " Access";
-            String description = "'" + appName + "' accessed your " + finalEventType.toLowerCase();
-            Recommendation rec = new Recommendation(title, description, recommendationType, finalPackageName);
-            try {
-                recommendationDao.insertRecommendation(rec);
-                Log.d(TAG, "BG Task: Saved " + recommendationType + " recommendation for: " + appName);
-            } catch (Exception e) { Log.e(TAG, "BG Task: Error inserting " + recommendationType + " rec for " + finalPackageName, e); }
+    // --- HELPER METHODS ---
+
+    private boolean isSystemApp(String packageName) {
+        try {
+            ApplicationInfo ai = getPackageManager().getApplicationInfo(packageName, 0);
+            return (ai.flags & ApplicationInfo.FLAG_SYSTEM) != 0;
+        } catch (PackageManager.NameNotFoundException e) {
+            return false;
+        }
+    }
+
+    private String getAppNameFromPackage(String packageName) {
+        try {
+            ApplicationInfo ai = getPackageManager().getApplicationInfo(packageName, 0);
+            return getPackageManager().getApplicationLabel(ai).toString();
+        } catch (PackageManager.NameNotFoundException e) {
+            return packageName;
+        }
+    }
+
+    private void logSensorEvent(String packageName, String appName, String sensorType, boolean isAlert) {
+        if (sensorLogDao == null || logExecutor == null) {
+            Log.e(TAG, "Logging system not initialized!");
+            return;
+        }
+
+        SensorLogEntry newEntry = new SensorLogEntry(
+                System.currentTimeMillis(),
+                packageName,
+                appName,
+                sensorType,
+                isAlert
+        );
+
+        logExecutor.execute(() -> {
+            sensorLogDao.insertLogEntry(newEntry);
+            Log.i(TAG, "Sensor Logged: " + sensorType + " by " + appName + (isAlert ? " (ALERT!)" : ""));
         });
     }
 
-    /** Checks if DAO, Executor are ready and package name is valid. */
-    private boolean isValidStateForDbOperation(String packageName) {
-        return packageName != null && recommendationDao != null && databaseExecutor != null && !databaseExecutor.isShutdown();
-    }
+    private void setupClipboardMonitoring() {
+        clipboardManager = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+        if (clipboardManager == null) return;
 
-    /** Logs reasons why a DB operation might fail. */
-    private void logFailureReason(String eventDescription, String packageName) {
-        if (packageName == null) Log.w(TAG, "Could not determine foreground app during " + eventDescription + ".");
-        if (recommendationDao == null) Log.e(TAG, "RecommendationDao is null during " + eventDescription + ".");
-        if (databaseExecutor == null || databaseExecutor.isShutdown()) Log.e(TAG, "DB Executor invalid during " + eventDescription + ".");
-    }
-
-    // --- Private Inner Class for LocationListener Implementation ---
-    private class InternalLocationListener implements LocationListener {
-
-        @Override
-        public void onLocationChanged(@NonNull Location location) {
-            Log.w(TAG, "Internal: Location changed event received.");
-            handleSensorUsage("LOCATION");
-        }
-
-        // REQUIRED BY OLDER ANDROID (API 24/25)
-        @Override
-        public void onStatusChanged(String provider, int status, Bundle extras) {
-            Log.d(TAG, "Internal: Location status changed for provider " + provider + ": status=" + status);
-        }
-
-        @Override
-        public void onProviderEnabled(@NonNull String provider) {
-            Log.d(TAG, "Internal: Location provider enabled: " + provider);
-        }
-
-        @Override
-        public void onProviderDisabled(@NonNull String provider) {
-            Log.d(TAG, "Internal: Location provider disabled: " + provider);
-        }
-    }
-    // --- End Inner Location Listener ---
-
-
-    // --- Microphone Monitoring Methods ---
-    private void startMicMonitoring() {
-        Log.d(TAG, "Starting mic monitoring timer (Interval: " + MIC_CHECK_INTERVAL_MS / 1000 + "s).");
-        micCheckRunnable = new Runnable() {
-            @Override
-            public void run() {
-                if (databaseExecutor != null && !databaseExecutor.isShutdown()) {
-                    databaseExecutor.execute(MonitoringService.this::checkMicrophoneStatus);
-                } else {
-                    Log.w(TAG, "Executor invalid, skipping mic check.");
-                }
-                micCheckHandler.postDelayed(this, MIC_CHECK_INTERVAL_MS);
+        clipListener = () -> {
+            if (monitorManager.isClipboardMonitoringEnabled()) {
+                Log.i(TAG, "CLIPBOARD ACCESS DETECTED!");
+                logSensorEvent("SYSTEM", "System Clipboard", "CLIPBOARD", false);
             }
         };
-        micCheckHandler.post(micCheckRunnable);
+        clipboardManager.addPrimaryClipChangedListener(clipListener);
     }
 
-    private void stopMicMonitoring() {
-        Log.d(TAG, "Stopping mic monitoring timer.");
-        if (micCheckHandler != null && micCheckRunnable != null) {
-            micCheckHandler.removeCallbacks(micCheckRunnable);
-        }
-        isMicInUse = false;
-    }
-
-    private void checkMicrophoneStatus() {
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            if (isMicInUse) isMicInUse = false;
-            return;
-        }
-        boolean micBusy = isMicrophoneInUse();
-        if (micBusy && !isMicInUse) {
-            Log.w(TAG, "Microphone appears IN USE!"); isMicInUse = true; handleSensorUsage("MICROPHONE");
-        } else if (!micBusy && isMicInUse) {
-            Log.i(TAG, "Microphone appears FREE."); isMicInUse = false;
-        }
-    }
-
-    private boolean isMicrophoneInUse() {
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) { return false; }
-        AudioRecord audioRecord = null; boolean isInUse = false;
-        try {
-            int sr=8000; int ch=AudioFormat.CHANNEL_IN_MONO; int fmt=AudioFormat.ENCODING_PCM_16BIT;
-            int bufferSize = AudioRecord.getMinBufferSize(sr, ch, fmt);
-            if (bufferSize <= 0) { Log.e(TAG, "Mic check: Invalid buffer size: " + bufferSize); return false; }
-            audioRecord = new AudioRecord(MediaRecorder.AudioSource.DEFAULT, sr, ch, fmt, bufferSize);
-            audioRecord.startRecording();
-            if (audioRecord.getRecordingState() == AudioRecord.RECORDSTATE_RECORDING) { isInUse = false; audioRecord.stop(); }
-            else { Log.w(TAG, "Mic check: State not RECORDING."); isInUse = true; }
-        } catch (Exception e) { Log.w(TAG, "Mic check: Exception, assuming mic in use: " + e.getMessage()); isInUse = true;
-        } finally { if (audioRecord != null) { try { audioRecord.release(); } catch (Exception e) { Log.e(TAG, "Mic check: Error releasing", e); }}}
-        return isInUse;
-    }
-    // --- End Microphone Methods ---
-
-    // --- Permission Status Monitoring Methods ---
-    private void startPermissionStatusMonitoring() {
-        Log.d(TAG, "Starting permission status monitoring timer (Interval: " + PERMISSION_CHECK_INTERVAL_MS / 60000 + "m).");
-        if (permissionCheckTimer != null) permissionCheckTimer.cancel();
-        permissionCheckTimer = new Timer();
-        permissionCheckTimer.scheduleAtFixedRate(new TimerTask() {
-            @Override public void run() {
-                if (databaseExecutor != null && !databaseExecutor.isShutdown()) {
-                    databaseExecutor.execute(MonitoringService.this::checkPermissionStatusChanges);
-                } else { Log.w(TAG, "Executor invalid, skipping perm status check."); }
-            }
-        }, 5 * 60 * 1000, PERMISSION_CHECK_INTERVAL_MS); // Start after 5 mins, repeat
-    }
-
-    private void stopPermissionStatusMonitoring() {
-        Log.d(TAG, "Stopping permission status monitoring timer.");
-        if (permissionCheckTimer != null) { permissionCheckTimer.cancel(); permissionCheckTimer = null; }
-    }
-
-    /** Checks grant status of key permissions for user apps, compares against last known status. Runs in background. */
-    private void checkPermissionStatusChanges() {
-        Log.d(TAG, "BG Task: Checking permission status changes...");
-        Context context = getApplicationContext();
-        PackageManager pm = context.getPackageManager();
-        RecommendationDao recDao = AppDatabase.getDatabase(context).recommendationDao();
-        if (recDao == null) { Log.e(TAG, "BG Task: DAO is null, cannot check perm status."); return; }
-
-        Map<String, Map<String, Boolean>> lastStatuses = loadPermissionStatuses();
-        Map<String, Map<String, Boolean>> currentStatuses = new HashMap<>();
-        List<PackageInfo> installedApps;
-        try { installedApps = pm.getInstalledPackages(PackageManager.GET_PERMISSIONS); }
-        catch (Exception e) { Log.e(TAG, "BG Task: Failed to get packages for status check.", e); return; }
-
-        for (PackageInfo pkgInfo : installedApps) {
-            try {
-                if (pkgInfo != null && pkgInfo.applicationInfo != null && (pkgInfo.applicationInfo.flags & ApplicationInfo.FLAG_SYSTEM) == 0) {
-                    String packageName = pkgInfo.packageName;
-                    Map<String, Boolean> appCurrentStatus = new HashMap<>();
-                    Map<String, Boolean> appLastStatus = lastStatuses.getOrDefault(packageName, new HashMap<>());
-
-                    for (String permission : KEY_PERMISSIONS_TO_MONITOR) {
-                        boolean isGranted = (pm.checkPermission(permission, packageName) == PackageManager.PERMISSION_GRANTED);
-                        appCurrentStatus.put(permission, isGranted);
-                        boolean wasGranted = appLastStatus.getOrDefault(permission, false);
-
-                        if (isGranted != wasGranted) { // If status changed
-                            Log.w(TAG, "PERMISSION " + (isGranted ? "GRANTED" : "REVOKED") + ": " + packageName + " -> " + permission);
-                            String appName = getAppNameFromPackage(packageName);
-                            savePermissionChangeRecommendation(recDao, appName, packageName, permission, isGranted);
-                        }
-                    }
-                    currentStatuses.put(packageName, appCurrentStatus);
-                }
-            } catch (Exception e) { Log.e(TAG, "BG Task: Error checking perm status for pkg: " + (pkgInfo != null ? pkgInfo.packageName : "null"), e); }
-        }
-        savePermissionStatuses(currentStatuses);
-        Log.d(TAG, "BG Task: Finished checking permission statuses.");
-    }
-
-    private void savePermissionChangeRecommendation(RecommendationDao dao, String appName, String packageName, String permission, boolean granted) {
-        try {
-            String simplePermName = formatPermissionName(permission);
-            String title = "Permission " + (granted ? "Granted" : "Revoked");
-            String description = "'" + appName + "' " + (granted ? "granted" : "revoked") + ": " + simplePermName;
-            String type = granted ? RECOMMENDATION_TYPE_PERM_GRANTED : RECOMMENDATION_TYPE_PERM_REVOKED;
-            Recommendation rec = new Recommendation(title, description, type, packageName);
-            dao.insertRecommendation(rec);
-            Log.d(TAG, "BG Task: Saved perm change rec: " + description);
-        } catch (Exception e) { Log.e(TAG, "BG Task: Error saving perm change rec for " + packageName, e); }
-    }
-
-
-    // --- SharedPreferences Helpers for Permission Status ---
-    private Map<String, Map<String, Boolean>> loadPermissionStatuses() {
-        String json = permissionStatusPrefs.getString(PERM_STATUS_KEY, null);
-        if (json != null) {
-            try {
-                Type type = new TypeToken<HashMap<String, HashMap<String, Boolean>>>(){}.getType();
-                return gson.fromJson(json, type);
-            } catch (Exception e) { Log.e(TAG, "Error loading perm statuses from JSON", e); }
-        }
-        return new HashMap<>();
-    }
-
-    private void savePermissionStatuses(Map<String, Map<String, Boolean>> statuses) {
-        try {
-            String json = gson.toJson(statuses);
-            permissionStatusPrefs.edit().putString(PERM_STATUS_KEY, json).apply();
-        } catch (Exception e) { Log.e(TAG, "Error saving perm statuses to JSON", e); }
-    }
-
-
-    // --- General Helper Methods ---
-
-    /** Checks if Usage Stats permission is granted. */
-    private boolean hasUsageStatsPermission(Context context) {
-        AppOpsManager appOps = (AppOpsManager) context.getSystemService(Context.APP_OPS_SERVICE);
-        if (appOps == null) return false;
-        int mode = appOps.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), context.getPackageName());
-        boolean hasPermission = (mode == AppOpsManager.MODE_ALLOWED);
-        return hasPermission;
-    }
-
-    /** Gets the likely foreground app package name using UsageStatsManager. */
-    private String getForegroundAppPackageName() {
-        if (!hasUsageStatsPermission(this)) { return null; }
-        UsageStatsManager usageStatsManager = (UsageStatsManager) getSystemService(Context.USAGE_STATS_SERVICE);
-        if (usageStatsManager == null) { Log.e(TAG, "UsageStatsManager is null."); return null; }
-        long currentTime = System.currentTimeMillis();
-        List<UsageStats> stats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, currentTime - 10 * 1000, currentTime);
-        String recentPackage = null;
-        if (stats != null && !stats.isEmpty()) {
-            try {
-                stats.sort(Comparator.comparingLong(UsageStats::getLastTimeUsed).reversed());
-                recentPackage = stats.get(0).getPackageName();
-            } catch (Exception e) { Log.e(TAG, "Error sorting usage stats.", e); }
-        }
-        return recentPackage;
-    }
-
-    /** Gets the user-friendly application name for a given package name. */
-    private String getAppNameFromPackage(String packageName) {
-        if (packageName == null || packageName.isEmpty()) return "Unknown App";
-        PackageManager pm = getApplicationContext().getPackageManager();
-        try {
-            ApplicationInfo appInfo = pm.getApplicationInfo(packageName, 0);
-            return appInfo.loadLabel(pm).toString();
-        } catch (Exception e) { Log.w(TAG, "App name not found for package: " + packageName); return packageName; }
-    }
-
-    /** Creates the notification channel for the foreground service. */
     private void createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            CharSequence name = "GuardianAI Monitoring"; String description = "GuardianAI active monitoring status";
-            int importance = NotificationManager.IMPORTANCE_LOW; NotificationChannel channel = new NotificationChannel(CHANNEL_ID, name, importance);
-            channel.setDescription(description); channel.setSound(null, null); channel.enableVibration(false);
-            NotificationManager nm = getSystemService(NotificationManager.class);
-            if (nm != null) nm.createNotificationChannel(channel); else Log.e(TAG, "NotificationManager null.");
+            NotificationChannel serviceChannel = new NotificationChannel(
+                    CHANNEL_ID,
+                    "Sensor Monitoring Service",
+                    NotificationManager.IMPORTANCE_LOW
+            );
+            NotificationManager manager = getSystemService(NotificationManager.class);
+            if (manager != null) {
+                manager.createNotificationChannel(serviceChannel);
+            }
         }
     }
 
-    /** Builds the persistent notification for the foreground service. */
-    private Notification createForegroundNotification() {
-        Intent i = new Intent(this, MainActivity.class);
-        PendingIntent pi = PendingIntent.getActivity(this, 0, i, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+    private Notification buildForegroundNotification() {
         return new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setContentTitle("GuardianAI Active")
-                .setContentText("Monitoring device activity.")
-                .setSmallIcon(R.drawable.ic_security)
-                .setContentIntent(pi)
-                .setOngoing(true).setPriority(NotificationCompat.PRIORITY_LOW).build();
+                .setContentText(currentStatusText) // Use the dynamic status text
+                .setSmallIcon(R.drawable.ic_shield)
+                .setCategory(Notification.CATEGORY_SERVICE)
+                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .build();
     }
 
-    /** Formats full permission names to shorter versions (e.g., CAMERA). */
-    private String formatPermissionName(String fullPermissionName) {
-        if (fullPermissionName == null) return "";
-        int lastDot = fullPermissionName.lastIndexOf('.');
-        if (lastDot >= 0 && lastDot < fullPermissionName.length() - 1) {
-            return fullPermissionName.substring(lastDot + 1);
+    private void updateForegroundNotification(String statusText) {
+        Notification newNotification = new NotificationCompat.Builder(this, CHANNEL_ID)
+                .setContentTitle("GuardianAI Monitoring")
+                .setContentText(statusText) // Dynamically set status
+                .setSmallIcon(R.drawable.ic_shield)
+                .setCategory(Notification.CATEGORY_SERVICE)
+                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .build();
+
+        NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (notificationManager != null) {
+            notificationManager.notify(NOTIFICATION_ID, newNotification);
         }
-        return fullPermissionName;
     }
-
-} // End of MonitoringService class
+}

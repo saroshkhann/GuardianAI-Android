@@ -55,7 +55,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel:2.6.2") // Use latest stable version
     implementation("androidx.lifecycle:lifecycle-livedata:2.6.2") // Use latest stable version
     implementation("com.google.code.gson:gson:2.10.1") // Or latest version
-
+    implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)

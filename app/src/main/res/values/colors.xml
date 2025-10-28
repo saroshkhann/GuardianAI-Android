@@ -8,6 +8,12 @@
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
 
-    <color name="high_risk_color">#D9534F</color>   <color name="medium_risk_color">#F0AD4E</color>  <color name="default_recommendation_color">#7F8C8D</color> <color name="primary_blue">#60B6D7</color>
+    <color name="high_risk_color">#D9534F</color>
+
+    <color name="high_risk_color_faded">#26D9534F</color>
+
+    <color name="medium_risk_color">#F0AD4E</color>
+    <color name="default_recommendation_color">#7F8C8D</color>
+    <color name="primary_blue">#60B6D7</color>
 
 </resources>

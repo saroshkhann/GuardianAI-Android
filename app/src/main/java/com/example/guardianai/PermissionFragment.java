@@ -292,7 +292,7 @@ public class PermissionFragment extends Fragment {
         for (PermissionCategory category : categoryList) {
             List<PackageInfo> apps = permissionGroupMap.get(category.getPermissionConstant());
             category.setAppCount(apps != null ? apps.size() : 0);
-            category.setTotalAppCount(totalAppCount);
+            category.setTotalAppCount(totalAppCount); // This passes the REAL total
         }
     }
 

@@ -1,18 +1,17 @@
 package com.example.guardianai;
-import android.content.Intent;
-import androidx.appcompat.app.AppCompatActivity;
 
 import android.content.Intent;
+import androidx.appcompat.app.AppCompatActivity;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
-import android.widget.TextView;
-import android.widget.Toast;
+// import android.widget.TextView; // No longer needed
+// import android.widget.Toast; // No longer needed
 
 public class WelcomeActivity extends AppCompatActivity {
 
     private Button getStartedButton;
-    private TextView skipButton;
+    // private TextView skipButton; // <-- REMOVED
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -20,12 +19,10 @@ public class WelcomeActivity extends AppCompatActivity {
         // This links the Java file to the XML layout file
         setContentView(R.layout.activity_welcome);
 
-        // Find the buttons from the layout by their ID
+        // Find the "Get Started" button
         getStartedButton = findViewById(R.id.button_get_started);
-        skipButton = findViewById(R.id.text_skip);
 
         // Set a click listener for the "Get Started" button
-        // ... inside onCreate method
         getStartedButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -35,19 +32,6 @@ public class WelcomeActivity extends AppCompatActivity {
             }
         });
 
-        // Set a click listener for the "Skip" button
-        skipButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                // This should skip the onboarding and go to the main dashboard
-                // For now, it shows a temporary message.
-                Toast.makeText(WelcomeActivity.this, "Skip Clicked!", Toast.LENGTH_SHORT).show();
-
-                // Example: How to start your main activity
-                // Intent intent = new Intent(WelcomeActivity.this, MainActivity.class);
-                // startActivity(intent);
-                // finish(); // Call finish() to prevent the user from coming back to this screen
-            }
-        });
+        // --- All code for the skipButton has been removed ---
     }
 }

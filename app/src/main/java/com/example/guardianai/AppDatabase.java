@@ -7,14 +7,21 @@ import androidx.room.Room;
 import androidx.room.RoomDatabase;
 import android.util.Log;
 
+
+import android.content.Context;
+import androidx.room.Database;
+import androidx.room.Room;
+import androidx.room.RoomDatabase;
+import android.util.Log;
+// (No need to explicitly import RecommendationDao or SensorLogDao if they are in the same package)
 // Add Recommendation.class to the entities list and increment version to 2
-@Database(entities = {AppPermissions.class, Recommendation.class}, version = 2, exportSchema = false)
+@Database(entities = {AppPermissions.class, Recommendation.class, SensorLogEntry.class}, version = 2, exportSchema = false)
 public abstract class AppDatabase extends RoomDatabase {
 
     // Abstract methods to get the DAOs for each table
     public abstract AppPermissionsDao appPermissionsDao();
     public abstract RecommendationDao recommendationDao(); // Added this line
-
+    public abstract SensorLogDao sensorLogDao();
     // Singleton pattern to prevent multiple instances of the database opening at the same time.
     private static volatile AppDatabase INSTANCE;
 

@@ -1,5 +1,5 @@
 package com.example.guardianai;
-
+import android.widget.Button;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
@@ -26,14 +26,16 @@ import androidx.cardview.widget.CardView;
 import androidx.constraintlayout.widget.ConstraintLayout;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
-import androidx.lifecycle.ViewModelProvider; // Keep ViewModel for LiveData setup
+import androidx.lifecycle.ViewModelProvider;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
+import androidx.core.widget.NestedScrollView; // <-- NEW IMPORT
 
 // --- ROOM DATABASE IMPORTS ---
 import com.example.guardianai.AppDatabase;
 import com.example.guardianai.AppPermissions;
 import com.example.guardianai.AppPermissionsDao;
 import com.example.guardianai.Recommendation;
-import com.example.guardianai.RecommendationDao; // Re-import DAO for background access
+import com.example.guardianai.RecommendationDao;
 // --- END ROOM IMPORTS ---
 
 import com.google.android.material.progressindicator.CircularProgressIndicator;
@@ -63,15 +65,15 @@ public class DashboardFragment extends Fragment {
     private LinearLayout recommendationsLayout;
     private ProgressBar loadingSpinner;
     private ConstraintLayout mainContentGroup;
-
+    private SwipeRefreshLayout swipeRefreshLayout;
+    private NestedScrollView nestedScrollView; // <-- ADDED MISSING VARIABLE
+    private Button btnViewSensorLog;
     // --- Logic Components ---
     private PermissionAnalyzer analyzer;
-    private Map<PermissionAnalyzer.RiskLevel, List<String>> categorizedApps; // Holds results from last scan
-    private RecommendationViewModel recommendationViewModel; // ViewModel instance
-    private AppPermissionsDao appPermissionsDao; // DAO for AppPermissions table
-    private RecommendationDao recommendationDao; // ADD THIS LINE ⬅️
-// ...
-// ...
+    private Map<PermissionAnalyzer.RiskLevel, List<String>> categorizedApps;
+    private RecommendationViewModel recommendationViewModel;
+    private AppPermissionsDao appPermissionsDao;
+    private RecommendationDao recommendationDao;
 
     // --- Threading Components ---
     private ExecutorService executorService;
@@ -84,7 +86,6 @@ public class DashboardFragment extends Fragment {
         View view = inflater.inflate(R.layout.fragment_dashboard, container, false);
         Log.d(TAG, "onCreateView called");
 
-        // Initialize ViewModel and DAOs
         recommendationViewModel = new ViewModelProvider(this).get(RecommendationViewModel.class);
         initializeViews(view);
         analyzer = new PermissionAnalyzer();
@@ -93,7 +94,7 @@ public class DashboardFragment extends Fragment {
         if (appContext != null) {
             AppDatabase db = AppDatabase.getDatabase(appContext);
             appPermissionsDao = db.appPermissionsDao();
-            recommendationDao = db.recommendationDao(); // Re-initialize Recommendation DAO
+            recommendationDao = db.recommendationDao();
             Log.d(TAG, "Database DAOs initialized.");
         } else {
             Log.e(TAG, "Context was null during DAO initialization!");
@@ -111,13 +112,41 @@ public class DashboardFragment extends Fragment {
         super.onViewCreated(view, savedInstanceState);
         Log.d(TAG, "onViewCreated called");
 
-        // --- OBSERVE LIVE DATA (Only used for real-time updates after initial load) ---
-        // This is kept, but it will now update the UI with a full list of *all* recommendations
         recommendationViewModel.getAllRecommendations().observe(getViewLifecycleOwner(), this::onRecommendationsLiveDataUpdate);
-        // --- End Observe LiveData ---
 
-        // Start the initial permission scan (calculates score, counts, and categories)
-        startPermissionScan();
+        // Setup the pull-to-refresh listener
+        if (swipeRefreshLayout != null) {
+            swipeRefreshLayout.setOnRefreshListener(() -> {
+                Log.d(TAG, "Pull-to-refresh triggered. Starting scan.");
+                startPermissionScan(true); // Pass true to indicate it's a refresh
+            });
+        }
+
+        // --- CRITICAL FIX: SCROLL LISTENER LOGIC ---
+        if (nestedScrollView != null && swipeRefreshLayout != null) {
+            // This listener enables/disables the SwipeRefreshLayout based on scroll position
+            nestedScrollView.setOnScrollChangeListener(new NestedScrollView.OnScrollChangeListener() {
+                @Override
+                public void onScrollChange(NestedScrollView v, int scrollX, int scrollY, int oldScrollX, int oldScrollY) {
+                    // If scrollY is 0, we are at the top of the content.
+                    if (scrollY == 0) {
+                        swipeRefreshLayout.setEnabled(true);
+                    } else {
+                        // We have scrolled down, disable SwipeRefreshLayout
+                        swipeRefreshLayout.setEnabled(false);
+                    }
+                }
+            });
+            // Initial state: Enable it, assuming we load at the top
+            swipeRefreshLayout.setEnabled(true);
+        }
+        // --- END CRITICAL FIX ---
+        if (btnViewSensorLog != null) {
+            btnViewSensorLog.setOnClickListener(v -> navigateToSensorLog());
+        }
+
+        // Start the initial permission scan (pass false for initial load)
+        startPermissionScan(false);
     }
 
     // --- Lifecycle Method: Refresh data when fragment becomes visible again ---
@@ -125,7 +154,7 @@ public class DashboardFragment extends Fragment {
     public void onResume() {
         super.onResume();
         Log.d(TAG, "onResume called, refreshing data...");
-        startPermissionScan();
+        startPermissionScan(true);
     }
 
     // --- Lifecycle Method: Clean up Executor ---
@@ -152,68 +181,81 @@ public class DashboardFragment extends Fragment {
         lowRiskCard = view.findViewById(R.id.card_low_risk);
         noRiskCard = view.findViewById(R.id.card_no_risk);
         recommendationsLayout = view.findViewById(R.id.recommendations_list);
-
         loadingSpinner = view.findViewById(R.id.loading_spinner);
         mainContentGroup = view.findViewById(R.id.main_content_group);
-
+        swipeRefreshLayout = view.findViewById(R.id.swipe_refresh_layout);
+        nestedScrollView = view.findViewById(R.id.nested_scroll_view_root); // <-- FIND MISSING VIEW
+        btnViewSensorLog = view.findViewById(R.id.btn_view_sensor_log);
         Log.d(TAG, "Views initialized.");
     }
 
-    // --- Method to Start the Background Scan ---
-    private void startPermissionScan() {
+    /**
+     * Method to Start the Background Scan
+     * @param isRefresh True if this is a pull-to-refresh or onResume, false if it's the initial load.
+     */
+    private void startPermissionScan(boolean isRefresh) {
         if (executorService == null || executorService.isShutdown() || appPermissionsDao == null || recommendationDao == null) {
             Log.e(TAG, "Cannot start scan: Executor or DAOs are not ready.");
             if(getActivity() != null) Toast.makeText(getActivity(), "Error initializing components.", Toast.LENGTH_LONG).show();
             updateDashboardBaseUI(-1, 0,0,0,0);
             updateRecommendationsUI(new ArrayList<>());
+            if (swipeRefreshLayout != null && swipeRefreshLayout.isRefreshing()) {
+                swipeRefreshLayout.setRefreshing(false);
+            }
             return;
         }
 
-        // --- SHOW SPINNER ---
-        // Only show spinner if the UI isn't already visible (i.e., first load or fresh start)
-        if (mainContentGroup.getVisibility() != View.VISIBLE) {
+        // --- SHOW SPINNER (Updated Logic) ---
+        if (isRefresh) {
+            if (swipeRefreshLayout != null && !swipeRefreshLayout.isRefreshing()) {
+                swipeRefreshLayout.setRefreshing(true);
+            }
+        } else if (mainContentGroup.getVisibility() != View.VISIBLE) {
             if (loadingSpinner != null) loadingSpinner.setVisibility(View.VISIBLE);
             if (mainContentGroup != null) mainContentGroup.setVisibility(View.GONE);
         }
         // --- END SHOW SPINNER ---
 
         Log.d(TAG, "Submitting permission scan task to executor...");
-        executorService.execute(() -> { // Submit task to run on the background thread
+        executorService.execute(() -> {
             Log.d(TAG, "Background scan task started.");
             Context context = getContext();
-            if (context == null) { Log.e(TAG, "Context became null. Aborting."); return; }
+            if (context == null) {
+                Log.e(TAG, "Context became null. Aborting.");
+                mainThreadHandler.post(() -> {
+                    if (swipeRefreshLayout != null && swipeRefreshLayout.isRefreshing()) {
+                        swipeRefreshLayout.setRefreshing(false);
+                    }
+                });
+                return;
+            }
 
-            // Perform the scan, categorization, DB saving, AND recommendation fetching in one go
             final ScanResult result = performScanAndCategorization(context, context.getPackageManager());
 
             // --- Post Results back to Main Thread ---
-            mainThreadHandler.post(() -> { // Use the handler to run code on the UI thread
+            mainThreadHandler.post(() -> {
                 Log.d(TAG, "Received scan results on main thread.");
                 if (result != null && isAdded() && getActivity() != null) {
-                    // 1. Update the categorizedApps map (used for card clicks)
                     categorizedApps = result.categorizedApps;
-
-                    // 2. Update the BASE UI (score and risk cards)
                     updateDashboardBaseUI(result.score, result.highRiskCount, result.mediumRiskCount, result.lowRiskCount, result.noRiskCount);
-
-                    // 3. Update the Recommendations UI (using the list fetched in background)
-                    // We call the observer handler manually here to display the initial data
                     onRecommendationsLiveDataUpdate(result.recommendations);
-
-                    // 4. Setup click listeners for cards
                     setupCardClickListeners();
 
-                    // --- HIDE SPINNER AND SHOW CONTENT ---
-                    if (loadingSpinner != null) loadingSpinner.setVisibility(View.GONE);
-                    if (mainContentGroup != null) mainContentGroup.setVisibility(View.VISIBLE);
-                    // --- END HIDE SPINNER ---
-
                     Log.d(TAG, "Full UI update complete.");
-                } else { // Handle failure
+                } else {
                     Log.e(TAG, "Scan result was null or fragment detached. UI not updated.");
                     if(getActivity() != null) Toast.makeText(getActivity(), "Failed to load app permissions.", Toast.LENGTH_SHORT).show();
-                    if (loadingSpinner != null) loadingSpinner.setVisibility(View.GONE);
                 }
+
+                // --- HIDE SPINNERS ---
+                if (swipeRefreshLayout != null && swipeRefreshLayout.isRefreshing()) {
+                    swipeRefreshLayout.setRefreshing(false);
+                }
+                if (!isRefresh) {
+                    if (loadingSpinner != null) loadingSpinner.setVisibility(View.GONE);
+                    if (mainContentGroup != null) mainContentGroup.setVisibility(View.VISIBLE);
+                }
+                // --- END HIDE SPINNERS ---
             });
         });
     }
@@ -226,14 +268,13 @@ public class DashboardFragment extends Fragment {
         int lowRiskCount = 0;
         int noRiskCount = 0;
         Map<PermissionAnalyzer.RiskLevel, List<String>> categorizedApps;
-        List<Recommendation> recommendations; // ADDED: Now holds Recommendation objects fetched from DB
+        List<Recommendation> recommendations;
     }
 
     // --- Core Scan Logic (Runs in Background) ---
     private ScanResult performScanAndCategorization(Context context, PackageManager pm) {
         ScanResult result = new ScanResult();
-
-        try { // Wrap major logic
+        try {
             result.categorizedApps = new HashMap<>();
             result.categorizedApps.put(PermissionAnalyzer.RiskLevel.HIGH, new ArrayList<>());
             result.categorizedApps.put(PermissionAnalyzer.RiskLevel.MEDIUM, new ArrayList<>());
@@ -247,10 +288,7 @@ public class DashboardFragment extends Fragment {
                 try {
                     if (pkgInfo != null && pkgInfo.applicationInfo != null && (pkgInfo.applicationInfo.flags & ApplicationInfo.FLAG_SYSTEM) == 0) {
                         String packageName = pkgInfo.packageName;
-
-                        // --- CRITICAL FILTER: EXCLUDE SELF APP ---
                         if (packageName.equals(context.getPackageName())) { continue; }
-                        // ----------------------------------------
 
                         totalUserAppsScanned++;
                         boolean appHasHighRisk = false;
@@ -263,12 +301,9 @@ public class DashboardFragment extends Fragment {
                             permissionsString = String.join(",", permissions);
                             for (String permission : permissions) {
                                 PermissionAnalyzer.RiskLevel risk = analyzer.getPermissionRisk(permission);
-
-                                // --- HYBRID SCORING LOGIC ---
                                 int grantStatus = pm.checkPermission(permission, packageName);
                                 boolean isGranted = (grantStatus == PackageManager.PERMISSION_GRANTED);
 
-                                // Only count risk if the permission is currently GRANTED.
                                 if (isGranted) {
                                     switch (risk) {
                                         case HIGH:   appHasHighRisk = true; break;
@@ -277,50 +312,36 @@ public class DashboardFragment extends Fragment {
                                     }
                                 }
                             }
-                            // Categorize based on highest GRANTED risk found
                             if (appHasHighRisk) result.categorizedApps.get(PermissionAnalyzer.RiskLevel.HIGH).add(packageName);
                             else if (appHasMediumRisk) result.categorizedApps.get(PermissionAnalyzer.RiskLevel.MEDIUM).add(packageName);
-                                // --- FIX: Ensure Low Risk box counts apps with GRANTED Low Risk perms ---
                             else if (appHasLowRisk) result.categorizedApps.get(PermissionAnalyzer.RiskLevel.LOW).add(packageName);
-                                // --- END FIX ---
-                            else {
-                                // App requested permissions, but ZERO granted H/M/L
-                                result.categorizedApps.get(PermissionAnalyzer.RiskLevel.NO_RISK).add(packageName);
-                            }
+                            else result.categorizedApps.get(PermissionAnalyzer.RiskLevel.NO_RISK).add(packageName);
                         } else {
-                            // No permissions requested at all
                             result.categorizedApps.get(PermissionAnalyzer.RiskLevel.NO_RISK).add(packageName);
                         }
-                        // Save/Update App Permissions record in DB
                         AppPermissions appPerms = new AppPermissions(packageName, permissionsString);
                         appPermissionsDao.insertOrUpdateAppPermissions(appPerms);
                     }
                 } catch (Exception e) {
                     Log.e("DashboardFragment BG", "Error processing/saving package: " + (pkgInfo != null ? pkgInfo.packageName : "null"), e);
                 }
-            } // End loop
+            }
 
-            // Get counts
             result.highRiskCount = result.categorizedApps.get(PermissionAnalyzer.RiskLevel.HIGH).size();
             result.mediumRiskCount = result.categorizedApps.get(PermissionAnalyzer.RiskLevel.MEDIUM).size();
             result.lowRiskCount = result.categorizedApps.get(PermissionAnalyzer.RiskLevel.LOW).size();
             result.noRiskCount = result.categorizedApps.get(PermissionAnalyzer.RiskLevel.NO_RISK).size();
-
-            // Calculate Score
             result.score = calculateScore(result.highRiskCount, result.mediumRiskCount, totalUserAppsScanned);
 
-            // --- NEW: Load ALL Recommendations from DB (Blocking read) ---
             RecommendationDao recDao = AppDatabase.getDatabase(context).recommendationDao();
-            result.recommendations = recDao.getAllRecommendations(); // Blocking read done on background thread
+            result.recommendations = recDao.getAllRecommendations();
             Log.d(TAG, "Background scan finished. Fetched " + result.recommendations.size() + " recs from DB.");
-            // --- END NEW ---
-
 
         } catch (Exception e) {
             Log.e("DashboardFragment BG", "Major error during background scan", e);
-            return null; // Indicate failure
+            return null;
         }
-        return result; // Return scan results and fully loaded recommendations
+        return result;
     }
 
 
@@ -339,33 +360,22 @@ public class DashboardFragment extends Fragment {
 
     // --- LiveData Observer Callback (Updates Recommendations UI) ---
     private void onRecommendationsLiveDataUpdate(List<Recommendation> dbRecommendations) {
-        // This observer will now only handle updates *after* the initial full load.
         Log.d(TAG, "LiveData observer received update with " + (dbRecommendations != null ? dbRecommendations.size() : "null") + " items.");
-
-        // Check if categorizedApps is ready (it's updated by startPermissionScan)
         if (categorizedApps == null) {
             Log.w(TAG, "Categorized map is null. Skipping live update.");
             return;
         }
 
-        // 1. Format the database recommendations into display strings
         List<String> displayStrings = new ArrayList<>();
-
-        // 2. Add Summary Recommendations (The crucial part that relies on the main scan)
         int highCount = (categorizedApps.get(PermissionAnalyzer.RiskLevel.HIGH) != null) ? categorizedApps.get(PermissionAnalyzer.RiskLevel.HIGH).size() : 0;
         int mediumCount = (categorizedApps.get(PermissionAnalyzer.RiskLevel.MEDIUM) != null) ? categorizedApps.get(PermissionAnalyzer.RiskLevel.MEDIUM).size() : 0;
 
-        // Add summary recs to the front of the list
         if (highCount > 0) displayStrings.add("Review " + highCount + " high-risk apps");
         if (mediumCount > 0) displayStrings.add("Check permissions for " + mediumCount + " medium-risk apps");
 
-
-        // 3. Add Formatted Strings from Real-time/Periodic Database Recommendations
         if (dbRecommendations != null) {
             for (Recommendation rec : dbRecommendations) {
-                String displayText = rec.description; // Base text
-
-                // Append package name in parentheses for click handling
+                String displayText = rec.description;
                 if (rec.associatedPackageName != null && !rec.associatedPackageName.isEmpty())
                 {
                     displayText += " (" + rec.associatedPackageName + ")";
@@ -373,7 +383,6 @@ public class DashboardFragment extends Fragment {
                 displayStrings.add(displayText);
             }
         }
-        // 4. Update the UI
         updateRecommendationsUI(displayStrings);
     }
 
@@ -388,11 +397,8 @@ public class DashboardFragment extends Fragment {
             return;
         }
 
-        // Update Score and Progress Bar
         if (progressText != null) progressText.setText(score == -1 ? "--" : String.valueOf(score));
         if (progressBar != null) progressBar.setProgress(score == -1 ? 0 : score, true);
-
-        // Update Risk Card Text
         if (highRiskText != null) highRiskText.setText("High Risk (" + high + ")");
         if (mediumRiskText != null) mediumRiskText.setText("Medium Risk (" + medium + ")");
         if (lowRiskText != null) lowRiskText.setText("Low Risk (" + low + ")");
@@ -410,7 +416,7 @@ public class DashboardFragment extends Fragment {
             return;
         }
 
-        recommendationsLayout.removeAllViews(); // Clear previous items
+        recommendationsLayout.removeAllViews();
         LayoutInflater inflater = LayoutInflater.from(context);
 
         if (currentDisplayRecommendations == null || currentDisplayRecommendations.isEmpty()) {
@@ -431,7 +437,6 @@ public class DashboardFragment extends Fragment {
                     if (recTextView != null) recTextView.setText(recText);
                     else Log.e(TAG, "TextView recommendation_text not found");
 
-                    // Set appropriate icon based on recommendation type (deduced from text)
                     if (recIcon != null) {
                         String lowerRecText = recText.toLowerCase();
                         if (lowerRecText.contains("high-risk") || lowerRecText.contains("camera")) {
@@ -447,7 +452,6 @@ public class DashboardFragment extends Fragment {
                             recIcon.setBackgroundResource(R.drawable.notice_background);
                             recIcon.setColorFilter(ContextCompat.getColor(context, R.color.default_recommendation_color));
                         } else {
-                            // Default icon for unclassified or permission grant/revoke events
                             recIcon.setImageResource(R.drawable.ic_lightbulb);
                             recIcon.setBackgroundResource(R.drawable.notice_background);
                             recIcon.setColorFilter(ContextCompat.getColor(context, R.color.default_recommendation_color));
@@ -456,7 +460,6 @@ public class DashboardFragment extends Fragment {
 
                     recommendationsLayout.addView(itemView);
 
-                    // Click listener
                     itemView.setOnClickListener(v -> {
                         Log.d(TAG, "Recommendation clicked: " + recText);
                         String packageName = extractPackageNameFromRecommendation(recText);
@@ -474,7 +477,6 @@ public class DashboardFragment extends Fragment {
     }
 
     // --- Other Helper Methods ---
-
     // Setup Click Listeners for Risk Cards
     private void setupCardClickListeners() {
         Log.d(TAG, "Setting up card click listeners...");
@@ -543,4 +545,15 @@ public class DashboardFragment extends Fragment {
         float density = context.getResources().getDisplayMetrics().density;
         return Math.round((float) dp * density);
     }
-} // End of DashboardFragment class
+    /**
+     * Navigates to the dedicated SensorLogFragment screen.
+     */
+    private void navigateToSensorLog() {
+        if (getParentFragmentManager() != null && isAdded()) {
+            getParentFragmentManager().beginTransaction()
+                    .replace(R.id.fragment_container, new SensorLogFragment())
+                    .addToBackStack("dashboard") // Adds to back stack so user can easily return
+                    .commit();
+        }
+    }
+}

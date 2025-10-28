@@ -43,6 +43,6 @@ public class PermissionCategory {
     }
 
     public void setTotalAppCount(int totalAppCount) {
-        this.totalAppCount = appCount;
+        this.totalAppCount = totalAppCount;
     }
 }
