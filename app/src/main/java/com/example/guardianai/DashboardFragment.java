@@ -1,20 +1,7 @@
 package com.example.guardianai;
-import android.content.pm.PackageManager;
-import android.content.pm.ApplicationInfo; // You need this too, if not already present
-import android.app.AppOpsManager;
-import android.os.Process;
-import android.provider.Settings;
-import android.content.Context;
-import android.content.Intent;
-import android.widget.TextView;
-import android.widget.Button;
-import android.widget.Toast;
-// CRITICAL IMPORTS for the new logic
-import com.example.guardianai.SensorLogDao;
-import com.example.guardianai.SensorLogEntry; // New data model
-import java.util.concurrent.TimeUnit; // For calculating the 24-hour cutoff
-import androidx.lifecycle.Observer; // Needed if getAllLogs() returns LiveData
-import android.widget.Button;
+
+// --- STANDARD ANDROID IMPORTS ---
+import android.app.AppOpsManager; // <-- Added
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
@@ -24,11 +11,13 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.Process; // <-- Added
 import android.provider.Settings;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button; // <-- Added
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
@@ -51,8 +40,8 @@ import com.example.guardianai.AppPermissions;
 import com.example.guardianai.AppPermissionsDao;
 import com.example.guardianai.Recommendation;
 import com.example.guardianai.RecommendationDao;
-import com.example.guardianai.SensorLogDao; // <-- ADDED
-import com.example.guardianai.SensorLogEntry; // <-- ADDED
+import com.example.guardianai.SensorLogDao;
+import com.example.guardianai.SensorLogEntry;
 // --- END ROOM IMPORTS ---
 
 import com.google.android.material.progressindicator.CircularProgressIndicator;
@@ -63,7 +52,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit; // <-- ADDED
+import java.util.concurrent.TimeUnit;
 
 public class DashboardFragment extends Fragment {
 
@@ -85,8 +74,7 @@ public class DashboardFragment extends Fragment {
     private ConstraintLayout mainContentGroup;
     private SwipeRefreshLayout swipeRefreshLayout;
     private Button btnViewSensorLog;
-
-    private TextView tvUsageAccessWarning;
+    private TextView tvUsageAccessWarning; // <-- ADDED VARIABLE
 
     // --- Logic Components ---
     private PermissionAnalyzer analyzer;
@@ -94,7 +82,7 @@ public class DashboardFragment extends Fragment {
     private RecommendationViewModel recommendationViewModel;
     private AppPermissionsDao appPermissionsDao;
     private RecommendationDao recommendationDao;
-    private SensorLogDao sensorLogDao; // <-- ADDED DAO
+    private SensorLogDao sensorLogDao;
 
     // --- Threading Components ---
     private ExecutorService executorService;
@@ -116,7 +104,7 @@ public class DashboardFragment extends Fragment {
             AppDatabase db = AppDatabase.getDatabase(appContext);
             appPermissionsDao = db.appPermissionsDao();
             recommendationDao = db.recommendationDao();
-            sensorLogDao = db.sensorLogDao(); // <-- DAO INITIALIZED
+            sensorLogDao = db.sensorLogDao();
             Log.d(TAG, "Database DAOs initialized.");
         } else {
             Log.e(TAG, "Context was null during DAO initialization!");
@@ -126,49 +114,6 @@ public class DashboardFragment extends Fragment {
         mainThreadHandler = new Handler(Looper.getMainLooper());
 
         return view;
-    }
-
-    // --- HELPER METHODS (Ensure these are present in MonitoringService.java) ---
-
-    /**
-     * Helper to determine if an app is a critical system app.
-     */
-    /**
-     * Helper to determine if an app is a critical system app.
-     * This MUST be inside a try-catch block for safety.
-     */
-    private boolean isSystemApp(String packageName) {
-        Context context = getContext();
-        if (context == null) {
-            // Cannot check status without context, safely assume non-system or handle error.
-            return false;
-        }
-
-        try {
-            ApplicationInfo ai = context.getPackageManager().getApplicationInfo(packageName, 0);
-
-            // This check correctly identifies system apps
-            return (ai.flags & ApplicationInfo.FLAG_SYSTEM) != 0;
-
-        } catch (PackageManager.NameNotFoundException e) {
-            // If the package is not found, treat it as not a system app for safety.
-            return false;
-        }
-    }
-
-    /**
-     * Helper to get user-friendly app name.
-     */
-    private String getAppNameFromPackage(String packageName) {
-        try {
-            // Check if the context (which provides the PackageManager) is available
-            if (getContext() == null) return null;
-            ApplicationInfo ai = getContext().getPackageManager().getApplicationInfo(packageName, 0);
-            return getContext().getPackageManager().getApplicationLabel(ai).toString();
-        } catch (PackageManager.NameNotFoundException e) {
-            // Fallback if app name lookup fails
-            return packageName;
-        }
     }
 
     // --- Lifecycle Method: View is Created and Ready ---
@@ -183,7 +128,7 @@ public class DashboardFragment extends Fragment {
         if (swipeRefreshLayout != null) {
             swipeRefreshLayout.setOnRefreshListener(() -> {
                 Log.d(TAG, "Pull-to-refresh triggered. Starting scan.");
-                startPermissionScan(true); // Pass true to indicate it's a refresh
+                startPermissionScan(true);
             });
         }
 
@@ -200,7 +145,10 @@ public class DashboardFragment extends Fragment {
     public void onResume() {
         super.onResume();
         Log.d(TAG, "onResume called, refreshing data...");
+
+        // CRITICAL: Check and prompt for Usage Access first
         checkAndPromptUsageAccess();
+
         startPermissionScan(true);
     }
 
@@ -232,42 +180,63 @@ public class DashboardFragment extends Fragment {
         mainContentGroup = view.findViewById(R.id.main_content_group);
         swipeRefreshLayout = view.findViewById(R.id.swipe_refresh_layout);
         btnViewSensorLog = view.findViewById(R.id.btn_view_sensor_log);
-
-        // --- ADDED NEW WARNING VIEW ---
-        tvUsageAccessWarning = view.findViewById(R.id.tv_usage_access_warning);
-        // --- END ADDED ---
+        tvUsageAccessWarning = view.findViewById(R.id.tv_usage_access_warning); // <-- ADDED VIEW INITIALIZATION
 
         Log.d(TAG, "Views initialized.");
     }
 
+    // --- NEW METHOD: Checks and prompts for Usage Access Permission ---
     /**
      * Checks for Usage Stats Permission and alerts the user if missing.
      */
     private void checkAndPromptUsageAccess() {
         if (getContext() == null) return;
 
-        // Check if Usage Access is granted (This is the critical system check)
         AppOpsManager appOps = (AppOpsManager) getContext().getSystemService(Context.APP_OPS_SERVICE);
-        int mode = appOps.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS,
-                Process.myUid(),
-                getContext().getPackageName());
+        int mode = AppOpsManager.MODE_DEFAULT; // Default to a non-allowed mode
+        if (appOps != null) {
+            mode = appOps.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS,
+                    Process.myUid(),
+                    getContext().getPackageName());
+        }
 
         boolean hasPermission = (mode == AppOpsManager.MODE_ALLOWED);
 
         if (!hasPermission) {
-            // Show the warning banner and button if access is denied
+            // Show the warning banner and link to settings if access is denied
             if (tvUsageAccessWarning != null) {
                 tvUsageAccessWarning.setVisibility(View.VISIBLE);
-                tvUsageAccessWarning.setText("Usage Access Required to monitor Camera/Mic.");
-                // You can add a button here to link directly to settings
+                tvUsageAccessWarning.setText("USAGE ACCESS DENIED. Monitoring is disabled. Tap to Fix.");
+
+                // Add click listener to take user to settings
+                tvUsageAccessWarning.setOnClickListener(v -> navigateToUsageAccessSettings());
             }
         } else {
             // Hide the warning if permission is granted
             if (tvUsageAccessWarning != null) {
                 tvUsageAccessWarning.setVisibility(View.GONE);
+                tvUsageAccessWarning.setOnClickListener(null); // Clear listener
             }
         }
     }
+
+    /**
+     * Helper method to navigate the user to the Usage Access Settings page.
+     */
+    private void navigateToUsageAccessSettings() {
+        if (getContext() == null) return;
+        Toast.makeText(getContext(), "Find 'GuardianAI' and enable Usage Access.", Toast.LENGTH_LONG).show();
+        try {
+            Intent intent = new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS);
+            startActivity(intent);
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to open Usage Access Settings activity", e);
+            Toast.makeText(getContext(), "Could not open Usage Access settings automatically.", Toast.LENGTH_LONG).show();
+        }
+    }
+    // --- END NEW METHODS ---
+
+
     /**
      * Method to Start the Background Scan
      * @param isRefresh True if this is a pull-to-refresh or onResume, false if it's the initial load.
@@ -463,18 +432,11 @@ public class DashboardFragment extends Fragment {
             }
         }
 
-        // We now SKIP calling generateSensorRecommendations(displayStrings);
-        // All sensor data remains isolated in the database.
-
-        // CRITICAL: Call the UI update here, as we removed the call inside the log generator.
-        updateRecommendationsUI(displayStrings);
+        // CRITICAL FIX: Integrate sensor logs here
+        generateSensorRecommendations(displayStrings);
     }
 
-    // --- NEW METHOD: FETCHES SENSOR LOGS FOR RECOMMENDATIONS ---
-    /**
-     * Fetches recent sensor logs and turns them into recommendation strings.
-     * This restores the real-time sensor events in AI Recommendations.
-     */
+    // --- UPDATED METHOD: FETCHES SENSOR LOGS AND UPDATES UI ---
     /**
      * Fetches recent sensor logs and turns them into recommendation strings.
      * This restores the real-time sensor events in AI Recommendations.
@@ -483,19 +445,25 @@ public class DashboardFragment extends Fragment {
         if (sensorLogDao == null || executorService == null) return;
 
         executorService.execute(() -> {
-            // CRITICAL FIX: Get data using the blocking method on the background thread.
-            List<SensorLogEntry> logEntries = sensorLogDao.getAllLogsBlocking();
-
-            // Fetch logs from the last 24 hours (for "recent activity")
+            List<SensorLogEntry> logEntries = new ArrayList<>();
             long cutoffTime = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(1);
 
-            // Use a temporary list to avoid concurrent modification issues
+            try {
+                Context context = getContext();
+                if (context != null) {
+                    logEntries = AppDatabase.getDatabase(context).sensorLogDao().getAllLogsBlocking();
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Error fetching sensor logs blocking.", e);
+            }
+
             List<String> newRecs = new ArrayList<>();
 
             for (SensorLogEntry log : logEntries) {
                 if (log.getTimestamp() > cutoffTime && log.isAlert()) {
                     String recText = "ALERT: " + log.getAppName() + " accessed " + log.getSensorType() + " in background.";
-                    if (!newRecs.contains(recText)) {
+
+                    if (!currentRecs.contains(recText) && !newRecs.contains(recText)) { // Check both lists
                         newRecs.add(recText);
                     }
                 }
@@ -564,7 +532,7 @@ public class DashboardFragment extends Fragment {
 
                     if (recIcon != null) {
                         String lowerRecText = recText.toLowerCase();
-                        if (lowerRecText.contains("high-risk") || lowerRecText.contains("camera") || lowerRecText.contains("alert")) { // <-- MODIFIED FOR SENSOR ALERT
+                        if (lowerRecText.contains("high-risk") || lowerRecText.contains("camera") || lowerRecText.contains("alert")) {
                             recIcon.setImageResource(R.drawable.ic_risk_high);
                             recIcon.setBackgroundResource(R.drawable.risk_card_high_bg);
                             recIcon.setColorFilter(ContextCompat.getColor(context, R.color.high_risk_color));
@@ -588,7 +556,7 @@ public class DashboardFragment extends Fragment {
                     itemView.setOnClickListener(v -> {
                         Log.d(TAG, "Recommendation clicked: " + recText);
                         String packageName = extractPackageNameFromRecommendation(recText);
-                        if (recText.contains("high-risk") || recText.contains("alert")) navigateToAppList(PermissionAnalyzer.RiskLevel.HIGH); // <-- MODIFIED FOR SENSOR ALERT
+                        if (recText.contains("high-risk") || recText.contains("alert")) navigateToAppList(PermissionAnalyzer.RiskLevel.HIGH);
                         else if (recText.contains("medium-risk")) navigateToAppList(PermissionAnalyzer.RiskLevel.MEDIUM);
                         else if (recText.contains("unused") || recText.contains("clipboard") || recText.contains("camera") || recText.contains("location") || recText.contains("permission")) {
                             if (packageName != null) openAppSettings(packageName);
@@ -679,12 +647,6 @@ public class DashboardFragment extends Fragment {
                     .replace(R.id.fragment_container, new SensorLogFragment())
                     .addToBackStack("dashboard") // Adds to back stack so user can easily return
                     .commit();
-
         }
-
-        // --- NEW METHOD: FETCHES SENSOR LOGS FOR RECOMMENDATIONS ---
-        /**
-         * Fetches recent sensor logs and turns them into recommendation strings.
-         * This restores the real-time sensor events in AI Recommendations.
-         */
-    }}
+    }
+}
