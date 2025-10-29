@@ -144,10 +144,11 @@ public class DashboardFragment extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
+        checkAndPromptUsageAccess();
         Log.d(TAG, "onResume called, refreshing data...");
 
         // CRITICAL: Check and prompt for Usage Access first
-        checkAndPromptUsageAccess();
+
 
         startPermissionScan(true);
     }
@@ -180,7 +181,7 @@ public class DashboardFragment extends Fragment {
         mainContentGroup = view.findViewById(R.id.main_content_group);
         swipeRefreshLayout = view.findViewById(R.id.swipe_refresh_layout);
         btnViewSensorLog = view.findViewById(R.id.btn_view_sensor_log);
-        tvUsageAccessWarning = view.findViewById(R.id.tv_usage_access_warning); // <-- ADDED VIEW INITIALIZATION
+        tvUsageAccessWarning = view.findViewById(R.id.tv_usage_access_warning); // Verify R.id matches XMLZATION
 
         Log.d(TAG, "Views initialized.");
     }
@@ -190,36 +191,39 @@ public class DashboardFragment extends Fragment {
      * Checks for Usage Stats Permission and alerts the user if missing.
      */
     private void checkAndPromptUsageAccess() {
-        if (getContext() == null) return;
+        if (getContext() == null || tvUsageAccessWarning == null) {
+            Log.e(TAG, "Context or warning TextView is null in checkAndPromptUsageAccess.");
+            return; // Exit if the view wasn't found
+        }
 
         AppOpsManager appOps = (AppOpsManager) getContext().getSystemService(Context.APP_OPS_SERVICE);
-        int mode = AppOpsManager.MODE_DEFAULT; // Default to a non-allowed mode
+        int mode = AppOpsManager.MODE_DEFAULT;
         if (appOps != null) {
-            mode = appOps.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS,
-                    Process.myUid(),
-                    getContext().getPackageName());
+            try {
+                mode = appOps.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS,
+                        Process.myUid(),
+                        getContext().getPackageName());
+            } catch (Exception e) {
+                Log.e(TAG, "Error checking Usage Stats permission", e);
+                mode = AppOpsManager.MODE_ERRORED;
+            }
         }
 
         boolean hasPermission = (mode == AppOpsManager.MODE_ALLOWED);
 
         if (!hasPermission) {
-            // Show the warning banner and link to settings if access is denied
-            if (tvUsageAccessWarning != null) {
-                tvUsageAccessWarning.setVisibility(View.VISIBLE);
-                tvUsageAccessWarning.setText("USAGE ACCESS DENIED. Monitoring is disabled. Tap to Fix.");
-
-                // Add click listener to take user to settings
-                tvUsageAccessWarning.setOnClickListener(v -> navigateToUsageAccessSettings());
-            }
+            // Permission DENIED - SHOW banner
+            Log.d(TAG, "Usage Access DENIED. Setting banner VISIBLE.");
+            tvUsageAccessWarning.setVisibility(View.VISIBLE); // CRITICAL LINE
+            tvUsageAccessWarning.setText("USAGE ACCESS DENIED. Monitoring is disabled. Tap to Fix.");
+            tvUsageAccessWarning.setOnClickListener(v -> navigateToUsageAccessSettings());
         } else {
-            // Hide the warning if permission is granted
-            if (tvUsageAccessWarning != null) {
-                tvUsageAccessWarning.setVisibility(View.GONE);
-                tvUsageAccessWarning.setOnClickListener(null); // Clear listener
-            }
+            // Permission GRANTED - HIDE banner
+            Log.d(TAG, "Usage Access GRANTED. Setting banner GONE.");
+            tvUsageAccessWarning.setVisibility(View.GONE); // CRITICAL LINE
+            tvUsageAccessWarning.setOnClickListener(null);
         }
     }
-
     /**
      * Helper method to navigate the user to the Usage Access Settings page.
      */
