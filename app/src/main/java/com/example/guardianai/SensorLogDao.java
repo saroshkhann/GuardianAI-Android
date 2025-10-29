@@ -29,4 +29,10 @@ public interface SensorLogDao {
     /** Clears old logs (optional maintenance). */
     @Query("DELETE FROM sensor_logs WHERE timestamp < :timestampCutoff")
     int deleteOldLogs(long timestampCutoff);
+
+    // Inside your SensorLogDao interface:
+
+    /** Retrieves all logs *blocking* the current thread (safe for ExecutorService). */
+    @Query("SELECT * FROM sensor_logs ORDER BY timestamp DESC")
+    List<SensorLogEntry> getAllLogsBlocking();
 }

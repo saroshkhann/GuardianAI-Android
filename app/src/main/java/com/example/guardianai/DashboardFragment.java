@@ -1,4 +1,10 @@
 package com.example.guardianai;
+
+// CRITICAL IMPORTS for the new logic
+import com.example.guardianai.SensorLogDao;
+import com.example.guardianai.SensorLogEntry; // New data model
+import java.util.concurrent.TimeUnit; // For calculating the 24-hour cutoff
+import androidx.lifecycle.Observer; // Needed if getAllLogs() returns LiveData
 import android.widget.Button;
 import android.content.Context;
 import android.content.Intent;
@@ -28,7 +34,7 @@ import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
-import androidx.core.widget.NestedScrollView; // <-- NEW IMPORT
+import androidx.core.widget.NestedScrollView;
 
 // --- ROOM DATABASE IMPORTS ---
 import com.example.guardianai.AppDatabase;
@@ -36,6 +42,8 @@ import com.example.guardianai.AppPermissions;
 import com.example.guardianai.AppPermissionsDao;
 import com.example.guardianai.Recommendation;
 import com.example.guardianai.RecommendationDao;
+import com.example.guardianai.SensorLogDao; // <-- ADDED
+import com.example.guardianai.SensorLogEntry; // <-- ADDED
 // --- END ROOM IMPORTS ---
 
 import com.google.android.material.progressindicator.CircularProgressIndicator;
@@ -46,6 +54,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit; // <-- ADDED
 
 public class DashboardFragment extends Fragment {
 
@@ -66,14 +75,15 @@ public class DashboardFragment extends Fragment {
     private ProgressBar loadingSpinner;
     private ConstraintLayout mainContentGroup;
     private SwipeRefreshLayout swipeRefreshLayout;
-    // <-- ADDED MISSING VARIABLE
     private Button btnViewSensorLog;
+
     // --- Logic Components ---
     private PermissionAnalyzer analyzer;
     private Map<PermissionAnalyzer.RiskLevel, List<String>> categorizedApps;
     private RecommendationViewModel recommendationViewModel;
     private AppPermissionsDao appPermissionsDao;
     private RecommendationDao recommendationDao;
+    private SensorLogDao sensorLogDao; // <-- ADDED DAO
 
     // --- Threading Components ---
     private ExecutorService executorService;
@@ -95,6 +105,7 @@ public class DashboardFragment extends Fragment {
             AppDatabase db = AppDatabase.getDatabase(appContext);
             appPermissionsDao = db.appPermissionsDao();
             recommendationDao = db.recommendationDao();
+            sensorLogDao = db.sensorLogDao(); // <-- DAO INITIALIZED
             Log.d(TAG, "Database DAOs initialized.");
         } else {
             Log.e(TAG, "Context was null during DAO initialization!");
@@ -122,8 +133,6 @@ public class DashboardFragment extends Fragment {
             });
         }
 
-
-        // --- END CRITICAL FIX ---
         if (btnViewSensorLog != null) {
             btnViewSensorLog.setOnClickListener(v -> navigateToSensorLog());
         }
@@ -167,8 +176,10 @@ public class DashboardFragment extends Fragment {
         loadingSpinner = view.findViewById(R.id.loading_spinner);
         mainContentGroup = view.findViewById(R.id.main_content_group);
         swipeRefreshLayout = view.findViewById(R.id.swipe_refresh_layout);
-
         btnViewSensorLog = view.findViewById(R.id.btn_view_sensor_log);
+
+        // NOTE: The missing nestedScrollView variable and logic were deleted to fix crashes.
+
         Log.d(TAG, "Views initialized.");
     }
 
@@ -366,7 +377,53 @@ public class DashboardFragment extends Fragment {
                 displayStrings.add(displayText);
             }
         }
-        updateRecommendationsUI(displayStrings);
+
+        // CRITICAL FIX 1: Integrate sensor logs here
+        generateSensorRecommendations(displayStrings);
+
+        // NOTE: We REMOVED the final updateRecommendationsUI(displayStrings) call from here
+        // because the new method handles the final UI update on the main thread.
+    }
+
+    // --- NEW METHOD: FETCHES SENSOR LOGS FOR RECOMMENDATIONS ---
+    /**
+     * Fetches recent sensor logs and turns them into recommendation strings.
+     * This restores the real-time sensor events in AI Recommendations.
+     */
+    /**
+     * Fetches recent sensor logs and turns them into recommendation strings.
+     * This restores the real-time sensor events in AI Recommendations.
+     */
+    private void generateSensorRecommendations(List<String> currentRecs) {
+        if (sensorLogDao == null || executorService == null) return;
+
+        executorService.execute(() -> {
+            // CRITICAL FIX: Get data using the blocking method on the background thread.
+            List<SensorLogEntry> logEntries = sensorLogDao.getAllLogsBlocking();
+
+            // Fetch logs from the last 24 hours (for "recent activity")
+            long cutoffTime = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(1);
+
+            // Use a temporary list to avoid concurrent modification issues
+            List<String> newRecs = new ArrayList<>();
+
+            for (SensorLogEntry log : logEntries) {
+                if (log.getTimestamp() > cutoffTime && log.isAlert()) {
+                    String recText = "ALERT: " + log.getAppName() + " accessed " + log.getSensorType() + " in background.";
+                    if (!newRecs.contains(recText)) {
+                        newRecs.add(recText);
+                    }
+                }
+            }
+
+            // --- Post final results back to the main thread ---
+            mainThreadHandler.post(() -> {
+                // Add the new sensor recommendations to the existing list
+                currentRecs.addAll(newRecs);
+                // Call the UI update method
+                updateRecommendationsUI(currentRecs);
+            });
+        });
     }
 
 
@@ -422,7 +479,7 @@ public class DashboardFragment extends Fragment {
 
                     if (recIcon != null) {
                         String lowerRecText = recText.toLowerCase();
-                        if (lowerRecText.contains("high-risk") || lowerRecText.contains("camera")) {
+                        if (lowerRecText.contains("high-risk") || lowerRecText.contains("camera") || lowerRecText.contains("alert")) { // <-- MODIFIED FOR SENSOR ALERT
                             recIcon.setImageResource(R.drawable.ic_risk_high);
                             recIcon.setBackgroundResource(R.drawable.risk_card_high_bg);
                             recIcon.setColorFilter(ContextCompat.getColor(context, R.color.high_risk_color));
@@ -446,7 +503,7 @@ public class DashboardFragment extends Fragment {
                     itemView.setOnClickListener(v -> {
                         Log.d(TAG, "Recommendation clicked: " + recText);
                         String packageName = extractPackageNameFromRecommendation(recText);
-                        if (recText.contains("high-risk")) navigateToAppList(PermissionAnalyzer.RiskLevel.HIGH);
+                        if (recText.contains("high-risk") || recText.contains("alert")) navigateToAppList(PermissionAnalyzer.RiskLevel.HIGH); // <-- MODIFIED FOR SENSOR ALERT
                         else if (recText.contains("medium-risk")) navigateToAppList(PermissionAnalyzer.RiskLevel.MEDIUM);
                         else if (recText.contains("unused") || recText.contains("clipboard") || recText.contains("camera") || recText.contains("location") || recText.contains("permission")) {
                             if (packageName != null) openAppSettings(packageName);
@@ -537,6 +594,12 @@ public class DashboardFragment extends Fragment {
                     .replace(R.id.fragment_container, new SensorLogFragment())
                     .addToBackStack("dashboard") // Adds to back stack so user can easily return
                     .commit();
+
         }
-    }
-}
+
+        // --- NEW METHOD: FETCHES SENSOR LOGS FOR RECOMMENDATIONS ---
+        /**
+         * Fetches recent sensor logs and turns them into recommendation strings.
+         * This restores the real-time sensor events in AI Recommendations.
+         */
+    }}
