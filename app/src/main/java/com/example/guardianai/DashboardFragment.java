@@ -1,4 +1,6 @@
 package com.example.guardianai;
+import android.content.pm.PackageManager;
+import android.content.pm.ApplicationInfo; // You need this too, if not already present
 import android.app.AppOpsManager;
 import android.os.Process;
 import android.provider.Settings;
@@ -124,6 +126,49 @@ public class DashboardFragment extends Fragment {
         mainThreadHandler = new Handler(Looper.getMainLooper());
 
         return view;
+    }
+
+    // --- HELPER METHODS (Ensure these are present in MonitoringService.java) ---
+
+    /**
+     * Helper to determine if an app is a critical system app.
+     */
+    /**
+     * Helper to determine if an app is a critical system app.
+     * This MUST be inside a try-catch block for safety.
+     */
+    private boolean isSystemApp(String packageName) {
+        Context context = getContext();
+        if (context == null) {
+            // Cannot check status without context, safely assume non-system or handle error.
+            return false;
+        }
+
+        try {
+            ApplicationInfo ai = context.getPackageManager().getApplicationInfo(packageName, 0);
+
+            // This check correctly identifies system apps
+            return (ai.flags & ApplicationInfo.FLAG_SYSTEM) != 0;
+
+        } catch (PackageManager.NameNotFoundException e) {
+            // If the package is not found, treat it as not a system app for safety.
+            return false;
+        }
+    }
+
+    /**
+     * Helper to get user-friendly app name.
+     */
+    private String getAppNameFromPackage(String packageName) {
+        try {
+            // Check if the context (which provides the PackageManager) is available
+            if (getContext() == null) return null;
+            ApplicationInfo ai = getContext().getPackageManager().getApplicationInfo(packageName, 0);
+            return getContext().getPackageManager().getApplicationLabel(ai).toString();
+        } catch (PackageManager.NameNotFoundException e) {
+            // Fallback if app name lookup fails
+            return packageName;
+        }
     }
 
     // --- Lifecycle Method: View is Created and Ready ---
