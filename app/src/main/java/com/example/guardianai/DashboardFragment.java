@@ -378,11 +378,11 @@ public class DashboardFragment extends Fragment {
             }
         }
 
-        // CRITICAL FIX 1: Integrate sensor logs here
-        generateSensorRecommendations(displayStrings);
+        // We now SKIP calling generateSensorRecommendations(displayStrings);
+        // All sensor data remains isolated in the database.
 
-        // NOTE: We REMOVED the final updateRecommendationsUI(displayStrings) call from here
-        // because the new method handles the final UI update on the main thread.
+        // CRITICAL: Call the UI update here, as we removed the call inside the log generator.
+        updateRecommendationsUI(displayStrings);
     }
 
     // --- NEW METHOD: FETCHES SENSOR LOGS FOR RECOMMENDATIONS ---
