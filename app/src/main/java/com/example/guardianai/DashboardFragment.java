@@ -1,5 +1,12 @@
 package com.example.guardianai;
-
+import android.app.AppOpsManager;
+import android.os.Process;
+import android.provider.Settings;
+import android.content.Context;
+import android.content.Intent;
+import android.widget.TextView;
+import android.widget.Button;
+import android.widget.Toast;
 // CRITICAL IMPORTS for the new logic
 import com.example.guardianai.SensorLogDao;
 import com.example.guardianai.SensorLogEntry; // New data model
@@ -77,6 +84,8 @@ public class DashboardFragment extends Fragment {
     private SwipeRefreshLayout swipeRefreshLayout;
     private Button btnViewSensorLog;
 
+    private TextView tvUsageAccessWarning;
+
     // --- Logic Components ---
     private PermissionAnalyzer analyzer;
     private Map<PermissionAnalyzer.RiskLevel, List<String>> categorizedApps;
@@ -146,6 +155,7 @@ public class DashboardFragment extends Fragment {
     public void onResume() {
         super.onResume();
         Log.d(TAG, "onResume called, refreshing data...");
+        checkAndPromptUsageAccess();
         startPermissionScan(true);
     }
 
@@ -178,11 +188,41 @@ public class DashboardFragment extends Fragment {
         swipeRefreshLayout = view.findViewById(R.id.swipe_refresh_layout);
         btnViewSensorLog = view.findViewById(R.id.btn_view_sensor_log);
 
-        // NOTE: The missing nestedScrollView variable and logic were deleted to fix crashes.
+        // --- ADDED NEW WARNING VIEW ---
+        tvUsageAccessWarning = view.findViewById(R.id.tv_usage_access_warning);
+        // --- END ADDED ---
 
         Log.d(TAG, "Views initialized.");
     }
 
+    /**
+     * Checks for Usage Stats Permission and alerts the user if missing.
+     */
+    private void checkAndPromptUsageAccess() {
+        if (getContext() == null) return;
+
+        // Check if Usage Access is granted (This is the critical system check)
+        AppOpsManager appOps = (AppOpsManager) getContext().getSystemService(Context.APP_OPS_SERVICE);
+        int mode = appOps.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS,
+                Process.myUid(),
+                getContext().getPackageName());
+
+        boolean hasPermission = (mode == AppOpsManager.MODE_ALLOWED);
+
+        if (!hasPermission) {
+            // Show the warning banner and button if access is denied
+            if (tvUsageAccessWarning != null) {
+                tvUsageAccessWarning.setVisibility(View.VISIBLE);
+                tvUsageAccessWarning.setText("Usage Access Required to monitor Camera/Mic.");
+                // You can add a button here to link directly to settings
+            }
+        } else {
+            // Hide the warning if permission is granted
+            if (tvUsageAccessWarning != null) {
+                tvUsageAccessWarning.setVisibility(View.GONE);
+            }
+        }
+    }
     /**
      * Method to Start the Background Scan
      * @param isRefresh True if this is a pull-to-refresh or onResume, false if it's the initial load.

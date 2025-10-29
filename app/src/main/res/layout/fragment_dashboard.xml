@@ -42,6 +42,20 @@
                 android:background="@android:color/white"
                 tools:context=".DashboardFragment"
                 tools:visibility="visible">
+                <TextView
+                    android:id="@+id/tv_usage_access_warning"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="#FFCDD2"
+                    android:padding="12dp"
+                    android:textAlignment="center"
+                    android:textColor="@color/high_risk_color"
+                    android:textStyle="bold"
+                    android:text="USAGE ACCESS DENIED. Real-time sensor monitoring is DISABLED."
+                    android:visibility="gone"
+                    app:layout_constraintTop_toBottomOf="@id/progress_bar"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintEnd_toEndOf="parent" />
 
                 <ImageView
                     android:id="@+id/logo_icon"
