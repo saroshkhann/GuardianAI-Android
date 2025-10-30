@@ -243,22 +243,43 @@ public class MonitoringService extends Service {
         boolean cameraInUse = isCameraBusy();
         boolean micInUse = isMicrophoneBusy();
 
+        // --- CAMERA detection ---
         if (cameraInUse && monitorManager.isCameraMonitoringEnabled()
                 && now - lastCamLogTime > MIN_LOG_INTERVAL_MS) {
-            String appName = getForegroundAppName(getApplicationContext());
-            logSensorEvent("UNKNOWN", appName, "CAMERA", true);
+
+            String pkg = GuardianAccessibilityService.currentForegroundApp;
+            String appName;
+            try {
+                ApplicationInfo ai = getPackageManager().getApplicationInfo(pkg, 0);
+                appName = getPackageManager().getApplicationLabel(ai).toString();
+            } catch (PackageManager.NameNotFoundException e) {
+                appName = pkg; // fallback to package name
+            }
+
+            logSensorEvent(pkg, appName, "CAMERA", true);
             lastCamLogTime = now;
-            Log.i(TAG, "Camera hardware busy (possible usage detected)");
+            Log.i(TAG, "Camera hardware busy (possible usage detected) by " + appName);
         }
 
+        // --- MICROPHONE detection ---
         if (micInUse && monitorManager.isMicMonitoringEnabled()
                 && now - lastMicLogTime > MIN_LOG_INTERVAL_MS) {
-            String appName = getForegroundAppName(getApplicationContext());
-            logSensorEvent("UNKNOWN", appName, "MICROPHONE", true);
+
+            String pkg = GuardianAccessibilityService.currentForegroundApp;
+            String appName;
+            try {
+                ApplicationInfo ai = getPackageManager().getApplicationInfo(pkg, 0);
+                appName = getPackageManager().getApplicationLabel(ai).toString();
+            } catch (PackageManager.NameNotFoundException e) {
+                appName = pkg;
+            }
+
+            logSensorEvent(pkg, appName, "MICROPHONE", true);
             lastMicLogTime = now;
-            Log.i(TAG, "Microphone hardware busy (possible usage detected)");
+            Log.i(TAG, "Microphone hardware busy (possible usage detected) by " + appName);
         }
     }
+
 
 
     private boolean isCameraBusy() {
